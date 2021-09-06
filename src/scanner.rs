@@ -60,7 +60,9 @@ impl Scanner {
                     line += new_line_count;
                     tokens.push(token);
                 }
-                CharacterScanResult::Err(message) => {}
+                CharacterScanResult::Err(message) => {
+                    println!("[Line {}] Error: {}", line , message);
+                }
                 CharacterScanResult::Skipped => {}
             }
         }
@@ -161,7 +163,7 @@ impl Scanner {
                     let token = Token::new(token_type, lexeme.chars().collect(), line);
                     make_result(token)
                 } else {
-                    CharacterScanResult::Err(format!("Unknown symbol"))
+                    CharacterScanResult::Err(format!("Unknown symbol {}", character))
                 }
             }
         }
