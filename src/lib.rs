@@ -4,6 +4,7 @@ use std::{fs, io, result::Result};
 mod scanner;
 mod token;
 mod token_type;
+mod expression;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");
@@ -25,7 +26,7 @@ pub fn run_file(path: String) {
 }
 
 fn run_interpreter(script: String) {
-    let scanner = Scanner::new(script);
+    let mut scanner = Scanner::new(script.as_str());
     let tokens = scanner.scan_tokens();
     for token in tokens {
         println!("token: {:?}", token);

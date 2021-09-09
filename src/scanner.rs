@@ -7,9 +7,8 @@ use peekmore::{PeekMore, PeekMoreIterator};
 use std::collections::HashMap;
 use std::str::Chars;
 
-pub struct Scanner {
-    source: String,
-    keywords: HashMap<String, KeywordTokenType>,
+pub struct Scanner<'a> {
+    source_iter: PeekMoreIterator<Chars<'a>>,
 }
 
 struct MatchedExpression {
@@ -35,21 +34,20 @@ enum CharacterScanResult {
     Err(String),
 }
 
-impl Scanner {
-    pub fn new(source: String) -> Scanner {
+impl<'a> Scanner<'a> {
+    pub fn new(source: &'a str) -> Scanner<'a> {
         Scanner {
-            source,
-            keywords: KeywordTokenType::make_keywords(),
+            source_iter: source.chars().peekmore()
         }
     }
 
-    pub fn scan_tokens(self) -> Vec<Token> {
+    pub fn scan_tokens(&mut self) -> Vec<Token> {
         let mut tokens = vec![];
-        let mut source_iter = self.source.chars().peekmore();
         let mut line = 1u32;
+        let keywords = KeywordTokenType::make_keywords();
 
-        while let Some(character) = source_iter.next() {
-            match Scanner::scan_token(character, line, &mut source_iter, &self.keywords) {
+        while let Some(character) = self.source_iter.next() {
+            match self.scan_token(character, line, &keywords) {
                 CharacterScanResult::NewLine => {
                     line += 1;
                 }
@@ -71,9 +69,9 @@ impl Scanner {
     }
 
     fn scan_token(
+        &mut self,
         character: char,
         line: u32,
-        source_iter: &mut PeekMoreIterator<Chars>,
         keywords: &HashMap<String, KeywordTokenType>,
     ) -> CharacterScanResult {
         let make_result = |token| CharacterScanResult::Token(token);
@@ -94,54 +92,50 @@ impl Scanner {
             ';' => make_token(TokenType::SingleChar(SingleCharTokenType::Simicolon)),
             '*' => make_token(TokenType::SingleChar(SingleCharTokenType::Star)),
             '!' => make_result(
-                Scanner::matches_expression(
+                self.matches_expression(
                     '!',
                     &'=',
-                    source_iter,
                     ExpressionOperatorTokenType::NotEqual,
                     ExpressionOperatorTokenType::Not,
                 )
                 .make_token(line),
             ),
             '=' => make_result(
-                Scanner::matches_expression(
+                self.matches_expression(
                     '=',
                     &'=',
-                    source_iter,
                     ExpressionOperatorTokenType::EqualEqual,
                     ExpressionOperatorTokenType::Equal,
                 )
                 .make_token(line),
             ),
             '>' => make_result(
-                Scanner::matches_expression(
+                self.matches_expression(
                     '>',
                     &'=',
-                    source_iter,
                     ExpressionOperatorTokenType::GreaterEqual,
                     ExpressionOperatorTokenType::Greater,
                 )
                 .make_token(line),
             ),
             '<' => make_result(
-                Scanner::matches_expression(
+                self.matches_expression(
                     '<',
                     &'=',
-                    source_iter,
                     ExpressionOperatorTokenType::LessEqual,
                     ExpressionOperatorTokenType::Less,
                 )
                 .make_token(line),
             ),
             '/' => {
-                if let Some(token_type) = Scanner::scan_slash(source_iter) {
+                if let Some(token_type) = self.scan_slash() {
                     make_token(token_type)
                 } else {
                     CharacterScanResult::NewLine
                 }
             }
             ' ' | '\r' | '\t' => CharacterScanResult::Skipped,
-            '"' => Scanner::scan_string_literal(source_iter).map_or(
+            '"' => self.scan_string_literal().map_or(
                 CharacterScanResult::Err(format!("Unterminated string")),
                 |(literal, line_count)| {
                     let lexeme = literal.chars().clone().collect();
@@ -151,34 +145,32 @@ impl Scanner {
                 },
             ),
             '\n' => CharacterScanResult::NewLine,
-            _ => {
-                if character.is_digit(10) {
-                    let (number, lexeme) = Scanner::scan_number(character, source_iter);
-                    let token_type = TokenType::Literal(LiteralTokenType::Number(number));
-                    let token = Token::new(token_type, lexeme.chars().collect(), line);
-                    make_result(token)
-                } else if character.is_alphanumeric() {
-                    let (token_type, lexeme) =
-                        Scanner::scan_identifier(character, source_iter, keywords);
-                    let token = Token::new(token_type, lexeme.chars().collect(), line);
-                    make_result(token)
-                } else {
-                    CharacterScanResult::Err(format!("Unknown symbol {}", character))
-                }
+            character if character.is_digit(10) => {
+                let (number, lexeme) = self.scan_number(character);
+                let token_type = TokenType::Literal(LiteralTokenType::Number(number));
+                let token = Token::new(token_type, lexeme.chars().collect(), line);
+                make_result(token)
+            },
+            character if character.is_alphanumeric() => {
+                let (token_type, lexeme) =
+                self.scan_identifier(character, keywords);
+                let token = Token::new(token_type, lexeme.chars().collect(), line);
+                make_result(token)
             }
+            _ =>  CharacterScanResult::Err(format!("Unknown symbol {}", character))
         }
     }
 
     fn matches_expression(
+        &mut self,
         first_char: char,
         match_char: &char,
-        source_iter: &mut PeekMoreIterator<Chars>,
         left: ExpressionOperatorTokenType,
         right: ExpressionOperatorTokenType,
     ) -> MatchedExpression {
-        if let Some(next) = source_iter.peek() {
+        if let Some(next) = self.source_iter.peek() {
             if next == match_char {
-                source_iter.next();
+                self.source_iter.next();
                 return MatchedExpression {
                     token_type: left,
                     lexeme: vec![first_char, *match_char],
@@ -196,9 +188,9 @@ impl Scanner {
         }
     }
 
-    fn scan_slash(source_iter: &mut PeekMoreIterator<Chars>) -> Option<TokenType> {
+    fn scan_slash(&mut self) -> Option<TokenType> {
         let mut is_advanced = false;
-        while let Some(next) = source_iter.peek() {
+        while let Some(next) = self.source_iter.peek() {
             match next {
                 '/' if !is_advanced => {
                     return Some(TokenType::SingleChar(SingleCharTokenType::Slash))
@@ -206,17 +198,17 @@ impl Scanner {
                 '\n' => return None,
                 _ => {
                     is_advanced = true;
-                    source_iter.next();
+                    self.source_iter.next();
                 }
             }
         }
         None
     }
 
-    fn scan_string_literal(source_iter: &mut PeekMoreIterator<Chars>) -> Option<(String, u32)> {
+    fn scan_string_literal(&mut self) -> Option<(String, u32)> {
         let mut result = String::new();
         let mut new_line_count = 0u32;
-        while let Some(next) = source_iter.next() {
+        while let Some(next) = self.source_iter.next() {
             match next {
                 '\n' => new_line_count += 1,
                 '"' => return Some((result, new_line_count)),
@@ -226,33 +218,33 @@ impl Scanner {
         None
     }
 
-    fn scan_number(first_char: char, source_iter: &mut PeekMoreIterator<Chars>) -> (f32, String) {
-        let mut result = Scanner::scan_digits(source_iter);
+    fn scan_number(&mut self, first_char: char) -> (f32, String) {
+        let mut result = self.scan_digits();
         result.insert(0, first_char);
 
-        if let Some(&'.') = source_iter.peek() {
-            let _ = source_iter.advance_cursor();
-            if let Some(character) = source_iter.peek() {
+        if let Some(&'.') = self.source_iter.peek() {
+            let _ = self.source_iter.advance_cursor();
+            if let Some(character) = self.source_iter.peek() {
                 if character.is_digit(10) {
-                    source_iter.reset_cursor();
-                    source_iter.next();
-                    let digits = Scanner::scan_digits(source_iter);
+                    self.source_iter.reset_cursor();
+                    self.source_iter.next();
+                    let digits = self.scan_digits();
                     result.push('.');
                     result.extend(digits);
                     return Scanner::chars_to_number(&result);
                 }
             }
         }
-        source_iter.reset_cursor();
+        self.source_iter.reset_cursor();
         Scanner::chars_to_number(&result)
     }
 
-    fn scan_digits(source_iter: &mut PeekMoreIterator<Chars>) -> Vec<char> {
+    fn scan_digits(&mut self) -> Vec<char> {
         let mut result = Vec::new();
-        while let Some(next) = source_iter.peek() {
+        while let Some(next) = self.source_iter.peek() {
             if next.is_digit(10) {
                 result.push(*next);
-                source_iter.next();
+                self.source_iter.next();
             } else {
                 break;
             }
@@ -266,16 +258,16 @@ impl Scanner {
     }
 
     fn scan_identifier(
+        &mut self,
         first_char: char,
-        source_iter: &mut PeekMoreIterator<Chars>,
         keywords: &HashMap<String, KeywordTokenType>,
     ) -> (TokenType, String) {
         let mut keyword: Vec<char> = vec![first_char];
 
-        while let Some(next) = source_iter.peek() {
+        while let Some(next) = self.source_iter.peek() {
             if next.is_alphanumeric() {
                 keyword.push(*next);
-                source_iter.next();
+                self.source_iter.next();
             } else {
                 break;
             }
