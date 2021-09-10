@@ -1,10 +1,11 @@
 use io::{BufRead, Error, Write};
 use scanner::Scanner;
 use std::{fs, io, result::Result};
+mod ast_printer;
+mod expression;
 mod scanner;
 mod token;
 mod token_type;
-mod expression;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");

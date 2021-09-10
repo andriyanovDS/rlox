@@ -37,7 +37,7 @@ enum CharacterScanResult {
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a str) -> Scanner<'a> {
         Scanner {
-            source_iter: source.chars().peekmore()
+            source_iter: source.chars().peekmore(),
         }
     }
 
@@ -59,7 +59,7 @@ impl<'a> Scanner<'a> {
                     tokens.push(token);
                 }
                 CharacterScanResult::Err(message) => {
-                    println!("[Line {}] Error: {}", line , message);
+                    println!("[Line {}] Error: {}", line, message);
                 }
                 CharacterScanResult::Skipped => {}
             }
@@ -150,14 +150,13 @@ impl<'a> Scanner<'a> {
                 let token_type = TokenType::Literal(LiteralTokenType::Number(number));
                 let token = Token::new(token_type, lexeme.chars().collect(), line);
                 make_result(token)
-            },
+            }
             character if character.is_alphanumeric() => {
-                let (token_type, lexeme) =
-                self.scan_identifier(character, keywords);
+                let (token_type, lexeme) = self.scan_identifier(character, keywords);
                 let token = Token::new(token_type, lexeme.chars().collect(), line);
                 make_result(token)
             }
-            _ =>  CharacterScanResult::Err(format!("Unknown symbol {}", character))
+            _ => CharacterScanResult::Err(format!("Unknown symbol {}", character)),
         }
     }
 

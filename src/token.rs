@@ -2,9 +2,9 @@ use crate::token_type::TokenType;
 
 #[derive(Debug)]
 pub struct Token {
-    token_type: TokenType,
-    lexeme: Vec<char>,
-    line: u32,
+    pub token_type: TokenType,
+    pub lexeme: Vec<char>,
+    pub line: u32,
 }
 
 impl Token {
