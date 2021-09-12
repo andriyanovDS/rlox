@@ -1,6 +1,6 @@
 use crate::token::Token;
 use crate::token_type::{
-    Delimeter, ExpressionOperatorTokenType, KeywordTokenType, LiteralTokenType,
+    Delimiter, ExpressionOperatorTokenType, KeywordTokenType, LiteralTokenType,
     SingleCharTokenType, TokenType,
 };
 use peekmore::{PeekMore, PeekMoreIterator};
@@ -79,17 +79,17 @@ impl<'a> Scanner<'a> {
             |token_type| make_result(Token::new_single_char(token_type, character, line));
 
         match character {
-            '(' => make_token(TokenType::OpenDelimeter(Delimeter::Paren)),
-            ')' => make_token(TokenType::CloseDelimeter(Delimeter::Paren)),
-            '{' => make_token(TokenType::OpenDelimeter(Delimeter::Brace)),
-            '}' => make_token(TokenType::CloseDelimeter(Delimeter::Brace)),
-            '[' => make_token(TokenType::OpenDelimeter(Delimeter::Bracket)),
-            ']' => make_token(TokenType::CloseDelimeter(Delimeter::Bracket)),
+            '(' => make_token(TokenType::OpenDelimiter(Delimiter::Paren)),
+            ')' => make_token(TokenType::CloseDelimiter(Delimiter::Paren)),
+            '{' => make_token(TokenType::OpenDelimiter(Delimiter::Brace)),
+            '}' => make_token(TokenType::CloseDelimiter(Delimiter::Brace)),
+            '[' => make_token(TokenType::OpenDelimiter(Delimiter::Bracket)),
+            ']' => make_token(TokenType::CloseDelimiter(Delimiter::Bracket)),
             ',' => make_token(TokenType::SingleChar(SingleCharTokenType::Comma)),
             '.' => make_token(TokenType::SingleChar(SingleCharTokenType::Dot)),
             '-' => make_token(TokenType::SingleChar(SingleCharTokenType::Minus)),
             '+' => make_token(TokenType::SingleChar(SingleCharTokenType::Plus)),
-            ';' => make_token(TokenType::SingleChar(SingleCharTokenType::Simicolon)),
+            ';' => make_token(TokenType::SingleChar(SingleCharTokenType::Semicolon)),
             '*' => make_token(TokenType::SingleChar(SingleCharTokenType::Star)),
             '!' => make_result(
                 self.matches_expression(
@@ -217,7 +217,7 @@ impl<'a> Scanner<'a> {
         None
     }
 
-    fn scan_number(&mut self, first_char: char) -> (f32, String) {
+    fn scan_number(&mut self, first_char: char) -> (f64, String) {
         let mut result = self.scan_digits();
         result.insert(0, first_char);
 
@@ -251,7 +251,7 @@ impl<'a> Scanner<'a> {
         result
     }
 
-    fn chars_to_number(chars: &Vec<char>) -> (f32, String) {
+    fn chars_to_number(chars: &Vec<char>) -> (f64, String) {
         let string: String = chars.iter().collect();
         (string.parse().unwrap(), string)
     }

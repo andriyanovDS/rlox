@@ -1,6 +1,5 @@
-use crate::expression::{Expression, Visitor};
+use crate::expression::{Expression, LiteralExpression, Visitor};
 use crate::token::Token;
-use crate::token_type::{LiteralTokenType, SingleCharTokenType, TokenType};
 
 struct AstPrinter;
 
@@ -13,16 +12,22 @@ impl Visitor<String> for AstPrinter {
         self.parenthize(String::from("group"), vec![expression])
     }
 
-    fn visit_literal(&self, literal: &LiteralTokenType) -> String {
+    fn visit_literal(&self, literal: &LiteralExpression) -> String {
         match literal {
-            LiteralTokenType::Identifier(id) => id.clone(),
-            LiteralTokenType::String(string) => string.clone(),
-            LiteralTokenType::Number(number) => number.to_string(),
+            LiteralExpression::True => String::from("true"),
+            LiteralExpression::False => String::from("false"),
+            LiteralExpression::Nil => String::from("true"),
+            LiteralExpression::String(string) => string.clone(),
+            LiteralExpression::Number(number) => number.to_string(),
         }
     }
 
     fn visit_unary(&self, operator: &Token, right: &Expression) -> String {
         self.parenthize(operator.lexeme.iter().collect(), vec![right])
+    }
+
+    fn visit_variable(&self, literal: String) -> String {
+        literal
     }
 }
 
@@ -37,6 +42,7 @@ impl AstPrinter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::token_type::{SingleCharTokenType, TokenType};
 
     #[test]
     fn it_works() {
@@ -46,10 +52,10 @@ mod tests {
                 vec!['-'],
                 0,
             ),
-            Box::new(Expression::Literal(LiteralTokenType::Number(123f32))),
+            Box::new(Expression::Literal(LiteralExpression::Number(12f64))),
         );
         let right_expression = Expression::Grouping(Box::new(Expression::Literal(
-            LiteralTokenType::Number(45.67f32),
+            LiteralExpression::Number(45.67f64),
         )));
         let expression = Expression::Binary(
             Box::new(left_expression),

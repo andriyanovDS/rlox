@@ -1,35 +1,35 @@
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     SingleChar(SingleCharTokenType),
-    CloseDelimeter(Delimeter),
-    OpenDelimeter(Delimeter),
+    CloseDelimiter(Delimiter),
+    OpenDelimiter(Delimiter),
     ExpressionOperator(ExpressionOperatorTokenType),
     Literal(LiteralTokenType),
     Keyword(KeywordTokenType),
     EOF,
 }
 
-#[derive(Debug)]
-pub enum Delimeter {
+#[derive(Debug, PartialEq, Clone)]
+pub enum Delimiter {
     Paren,
     Bracket,
     Brace,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum SingleCharTokenType {
     Comma,
     Dot,
     Minus,
     Plus,
-    Simicolon,
+    Semicolon,
     Slash,
     Star,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ExpressionOperatorTokenType {
     Not,
     NotEqual,
@@ -41,14 +41,14 @@ pub enum ExpressionOperatorTokenType {
     LessEqual,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum LiteralTokenType {
     Identifier(String),
     String(String),
-    Number(f32),
+    Number(f64),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum KeywordTokenType {
     And,
     Class,

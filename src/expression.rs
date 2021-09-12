@@ -1,18 +1,27 @@
 use crate::token::Token;
-use crate::token_type::LiteralTokenType;
 
 pub trait Visitor<Result> {
     fn visit_binary(&self, left: &Expression, operator: &Token, right: &Expression) -> Result;
     fn visit_grouping(&self, expression: &Expression) -> Result;
-    fn visit_literal(&self, literal: &LiteralTokenType) -> Result;
+    fn visit_literal(&self, literal: &LiteralExpression) -> Result;
     fn visit_unary(&self, operator: &Token, right: &Expression) -> Result;
+    fn visit_variable(&self, literal: String) -> Result;
 }
 
 pub enum Expression {
     Binary(Box<Expression>, Token, Box<Expression>),
     Grouping(Box<Expression>),
-    Literal(LiteralTokenType),
+    Literal(LiteralExpression),
     Unary(Token, Box<Expression>),
+    Variable(String),
+}
+
+pub enum LiteralExpression {
+    False,
+    True,
+    Nil,
+    String(String),
+    Number(f64),
 }
 
 impl Expression {
@@ -24,6 +33,7 @@ impl Expression {
             Expression::Grouping(ref expression) => visitor.visit_grouping(expression),
             Expression::Literal(ref literal) => visitor.visit_literal(literal),
             Expression::Unary(ref operator, ref right) => visitor.visit_unary(operator, right),
+            Expression::Variable(ref literal) => visitor.visit_variable(literal.clone()),
         }
     }
 }

@@ -3,6 +3,7 @@ use scanner::Scanner;
 use std::{fs, io, result::Result};
 mod ast_printer;
 mod expression;
+mod parser;
 mod scanner;
 mod token;
 mod token_type;
