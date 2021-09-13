@@ -1,4 +1,5 @@
 use crate::token::Token;
+use std::fmt::{Debug, Formatter};
 
 pub trait Visitor<Result> {
     fn visit_binary(&self, left: &Expression, operator: &Token, right: &Expression) -> Result;
@@ -8,6 +9,7 @@ pub trait Visitor<Result> {
     fn visit_variable(&self, literal: String) -> Result;
 }
 
+#[derive(Debug)]
 pub enum Expression {
     Binary(Box<Expression>, Token, Box<Expression>),
     Grouping(Box<Expression>),
@@ -16,6 +18,7 @@ pub enum Expression {
     Variable(String),
 }
 
+#[derive(Debug)]
 pub enum LiteralExpression {
     False,
     True,

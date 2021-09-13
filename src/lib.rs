@@ -1,6 +1,8 @@
 use io::{BufRead, Error, Write};
 use scanner::Scanner;
 use std::{fs, io, result::Result};
+use crate::parser::Parser;
+
 mod ast_printer;
 mod expression;
 mod parser;
@@ -30,7 +32,6 @@ pub fn run_file(path: String) {
 fn run_interpreter(script: String) {
     let mut scanner = Scanner::new(script.as_str());
     let tokens = scanner.scan_tokens();
-    for token in tokens {
-        println!("token: {:?}", token);
-    }
+    let mut parser = Parser::new(&tokens);
+    parser.parse();
 }

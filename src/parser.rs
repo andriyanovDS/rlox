@@ -6,6 +6,7 @@ use crate::token_type::{
 };
 use std::iter::Peekable;
 use std::slice::Iter;
+use crate::token_type::TokenType::EOF;
 
 pub struct Parser<'a> {
     tokens_iter: Peekable<Iter<'a, Token>>,
@@ -25,10 +26,15 @@ impl<'a> Parser<'a> {
     pub fn parse(&mut self) {
         while let result = self.expression() {
             match result {
-                Ok(expression) => {}
+                Ok(expression) => {
+                    println!("expression: {:?}", expression);
+                }
+                Err(error) if error.token.token_type ==TokenType::EOF => {
+                    break
+                },
                 Err(error) => {
                     self.synchronize();
-                    eprint!(error.error_message());
+                    eprint!("{}", error.error_message());
                 }
             }
         }
@@ -94,8 +100,12 @@ impl<'a> Parser<'a> {
         let next_token = self.tokens_iter.peek();
         let next_token_type = next_token.map(|v| &v.token_type);
         match next_token_type {
-            Some(TokenType::Literal(literal)) => Ok(literal.to_expression()),
+            Some(TokenType::Literal(literal)) => {
+                self.advance();
+                Ok(literal.to_expression())
+            }
             Some(TokenType::Keyword(keyword)) => {
+                self.advance();
                 Ok(keyword.to_expression().expect("Expect expression"))
             }
             Some(TokenType::OpenDelimiter(delimiter)) if *delimiter == Delimiter::Paren => {
@@ -132,8 +142,8 @@ impl<'a> Parser<'a> {
         let mut expression = expression_factory(self)?;
 
         while self.next_matches_any(token_types) {
-            let operator = self.current.unwrap();
             self.advance();
+            let operator = self.current.unwrap();
 
             let right_expression = expression_factory(self)?;
             expression = Expression::Binary(
@@ -164,13 +174,15 @@ impl<'a> Parser<'a> {
     fn advance(&mut self) -> Option<&'a Token> {
         self.previous = self.current.take();
         self.current = self.tokens_iter.next();
-        match self.current {
-            Some(token) if token.token_type == TokenType::EOF => None,
-            _ => self.current,
-        }
+        self.current
     }
 
     fn synchronize(&mut self) {
+        if let Some(token) = self.current {
+            if TokenType::SingleChar(SingleCharTokenType::Semicolon) == token.token_type {
+                return;
+            }
+        }
         while let Some(token) = self.advance() {
             if let TokenType::Keyword(ref keyword) = token.token_type {
                 match keyword {
@@ -221,11 +233,7 @@ struct ParseError {
 
 impl ParseError {
     fn error_message(&self) -> String {
-        if self.token.token_type == TokenType::EOF {
-            format!("{} at end {}", self.token.line, self.message)
-        } else {
-            let lexeme: String = self.token.lexeme.iter().collect();
-            format!("{} at '{}' {}", self.token.line, lexeme, self.message)
-        }
+        let lexeme: String = self.token.lexeme.iter().collect();
+        format!("{} at '{}' {}", self.token.line, lexeme, self.message)
     }
 }
