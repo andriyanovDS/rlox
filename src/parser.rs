@@ -23,7 +23,15 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(&mut self) {
-        while let Some(token) = self.advance() {}
+        while let result = self.expression() {
+            match result {
+                Ok(expression) => {}
+                Err(error) => {
+                    self.synchronize();
+                    eprint!(error.error_message());
+                }
+            }
+        }
     }
 
     fn expression(&mut self) -> Result<Expression, ParseError> {
@@ -73,7 +81,10 @@ impl<'a> Parser<'a> {
             let operator = self.current.unwrap();
             self.advance();
             let right_expression = self.unary()?;
-            Ok(Expression::Unary(operator.clone(), Box::new(right_expression)))
+            Ok(Expression::Unary(
+                operator.clone(),
+                Box::new(right_expression),
+            ))
         } else {
             self.primary()
         }
@@ -86,14 +97,14 @@ impl<'a> Parser<'a> {
             Some(TokenType::Literal(literal)) => Ok(literal.to_expression()),
             Some(TokenType::Keyword(keyword)) => {
                 Ok(keyword.to_expression().expect("Expect expression"))
-            },
+            }
             Some(TokenType::OpenDelimiter(delimiter)) if *delimiter == Delimiter::Paren => {
                 self.advance();
                 self.find_group()
-            },
+            }
             _ => Err(ParseError {
                 token: (*next_token.unwrap()).clone(),
-                message: "Expected expression"
+                message: "Expected expression",
             }),
         }
     }
@@ -108,7 +119,7 @@ impl<'a> Parser<'a> {
             }
             _ => Err(ParseError {
                 token: (*self.tokens_iter.peek().unwrap()).clone(),
-                message: "Expect ')' after expression."
+                message: "Expect ')' after expression.",
             }),
         }
     }
@@ -153,16 +164,35 @@ impl<'a> Parser<'a> {
     fn advance(&mut self) -> Option<&'a Token> {
         self.previous = self.current.take();
         self.current = self.tokens_iter.next();
-        self.current
+        match self.current {
+            Some(token) if token.token_type == TokenType::EOF => None,
+            _ => self.current,
+        }
+    }
+
+    fn synchronize(&mut self) {
+        while let Some(token) = self.advance() {
+            if let TokenType::Keyword(ref keyword) = token.token_type {
+                match keyword {
+                    KeywordTokenType::Class
+                    | KeywordTokenType::For
+                    | KeywordTokenType::Fun
+                    | KeywordTokenType::Var
+                    | KeywordTokenType::If
+                    | KeywordTokenType::While
+                    | KeywordTokenType::Print
+                    | KeywordTokenType::Return => return,
+                    _ => continue,
+                }
+            }
+        }
     }
 }
 
 impl LiteralTokenType {
     fn to_expression(&self) -> Expression {
         match self {
-            LiteralTokenType::Identifier(identifier) => {
-                Expression::Variable(identifier.clone())
-            },
+            LiteralTokenType::Identifier(identifier) => Expression::Variable(identifier.clone()),
             LiteralTokenType::Number(number) => {
                 Expression::Literal(LiteralExpression::Number(*number))
             }
@@ -186,11 +216,10 @@ impl KeywordTokenType {
 
 struct ParseError {
     token: Token,
-    message: &'static str
+    message: &'static str,
 }
 
 impl ParseError {
-
     fn error_message(&self) -> String {
         if self.token.token_type == TokenType::EOF {
             format!("{} at end {}", self.token.line, self.message)
