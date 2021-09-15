@@ -29,7 +29,7 @@ impl<'a> Parser<'a> {
                 Ok(expression) => {
                     println!("expression: {:?}", expression);
                 }
-                Err(error) if error.token.token_type ==TokenType::EOF => {
+                Err(error) if error.token.token_type == TokenType::EOF => {
                     break
                 },
                 Err(error) => {

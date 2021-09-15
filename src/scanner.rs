@@ -191,15 +191,15 @@ impl<'a> Scanner<'a> {
         let mut is_advanced = false;
         while let Some(next) = self.source_iter.peek() {
             match next {
-                '/' if !is_advanced => {
-                    return Some(TokenType::SingleChar(SingleCharTokenType::Slash))
-                }
+                '/' => is_advanced = true,
                 '\n' => return None,
                 _ => {
-                    is_advanced = true;
-                    self.source_iter.next();
+                    if !is_advanced {
+                        return Some(TokenType::SingleChar(SingleCharTokenType::Slash))
+                    }
                 }
             }
+            self.source_iter.next();
         }
         None
     }
