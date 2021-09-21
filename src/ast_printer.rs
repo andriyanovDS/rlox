@@ -5,11 +5,11 @@ struct AstPrinter;
 
 impl Visitor<String> for AstPrinter {
     fn visit_binary(&self, left: &Expression, operator: &Token, right: &Expression) -> String {
-        self.parenthize(operator.lexeme.iter().collect(), vec![left, right])
+        self.parenthesize(operator.lexeme.iter().collect(), vec![left, right])
     }
 
     fn visit_grouping(&self, expression: &Expression) -> String {
-        self.parenthize(String::from("group"), vec![expression])
+        self.parenthesize(String::from("group"), vec![expression])
     }
 
     fn visit_literal(&self, literal: &LiteralExpression) -> String {
@@ -23,7 +23,7 @@ impl Visitor<String> for AstPrinter {
     }
 
     fn visit_unary(&self, operator: &Token, right: &Expression) -> String {
-        self.parenthize(operator.lexeme.iter().collect(), vec![right])
+        self.parenthesize(operator.lexeme.iter().collect(), vec![right])
     }
 
     fn visit_variable(&self, literal: String) -> String {
@@ -32,7 +32,7 @@ impl Visitor<String> for AstPrinter {
 }
 
 impl AstPrinter {
-    fn parenthize(&self, name: String, expressions: Vec<&Expression>) -> String {
+    fn parenthesize(&self, name: String, expressions: Vec<&Expression>) -> String {
         let tokens: Vec<String> = expressions.iter().map(|v| v.accept(self)).collect();
 
         format!("({} {})", name, tokens.join(" "))
@@ -45,7 +45,7 @@ mod tests {
     use crate::token_type::{SingleCharTokenType, TokenType};
 
     #[test]
-    fn it_works() {
+    fn test_that_printer_generates_correct_output() {
         let left_expression = Expression::Unary(
             Token::new(
                 TokenType::SingleChar(SingleCharTokenType::Minus),
@@ -69,6 +69,6 @@ mod tests {
         let ast_printer = AstPrinter {};
         let result = expression.accept(&ast_printer);
 
-        assert_eq!(result, String::from("(* (- 123) (group 45.67))"));
+        assert_eq!(result, String::from("(* (- 12) (group 45.67))"));
     }
 }

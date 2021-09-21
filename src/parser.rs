@@ -15,7 +15,7 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: &'a Vec<Token>) -> Self {
+    pub fn new(tokens: &'a [Token]) -> Self {
         Self {
             tokens_iter: tokens.iter().peekable(),
             current: None,
@@ -137,7 +137,7 @@ impl<'a> Parser<'a> {
     fn find_binary_expression<F: Fn(&mut Parser<'a>) -> Result<Expression, ParseError>>(
         &mut self,
         expression_factory: F,
-        token_types: &Vec<TokenType>,
+        token_types: &[TokenType],
     ) -> Result<Expression, ParseError> {
         let mut expression = expression_factory(self)?;
 
@@ -155,15 +155,7 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn next_matches_one(&mut self, token_type: TokenType) -> bool {
-        if let Some(next) = self.tokens_iter.peek() {
-            next.token_type == token_type
-        } else {
-            false
-        }
-    }
-
-    fn next_matches_any(&mut self, token_types: &Vec<TokenType>) -> bool {
+    fn next_matches_any(&mut self, token_types: &[TokenType]) -> bool {
         if let Some(next) = self.tokens_iter.peek() {
             token_types.iter().any(|v| v == &next.token_type)
         } else {
@@ -235,5 +227,21 @@ impl ParseError {
     fn error_message(&self) -> String {
         let lexeme: String = self.token.lexeme.iter().collect();
         format!("{} at '{}' {}", self.token.line, lexeme, self.message)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_that_parser_generates_correct_output() {
+        let tokens = vec![
+            Token::new(TokenType::Literal(LiteralTokenType::Number(125f64)), vec!['1', '2', '3'], 1),
+            Token::new(TokenType::SingleChar(SingleCharTokenType::Plus), vec!['+'], 1),
+            Token::new(TokenType::Literal(LiteralTokenType::Number(255f64)), vec!['1', '2', '3'], 1)
+        ];
+        let mut parser = Parser::new(&tokens);
+        parser.parse();
     }
 }

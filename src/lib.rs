@@ -9,6 +9,8 @@ mod parser;
 mod scanner;
 mod token;
 mod token_type;
+mod interpreter;
+mod object;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");

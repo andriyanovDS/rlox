@@ -1,5 +1,5 @@
 use crate::token::Token;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug};
 
 pub trait Visitor<Result> {
     fn visit_binary(&self, left: &Expression, operator: &Token, right: &Expression) -> Result;

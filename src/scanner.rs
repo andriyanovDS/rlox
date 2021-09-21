@@ -136,12 +136,12 @@ impl<'a> Scanner<'a> {
             }
             ' ' | '\r' | '\t' => CharacterScanResult::Skipped,
             '"' => self.scan_string_literal().map_or(
-                CharacterScanResult::Err(format!("Unterminated string")),
+                CharacterScanResult::Err("Unterminated string".to_string()),
                 |(literal, line_count)| {
                     let lexeme = literal.chars().clone().collect();
                     let token_type = TokenType::Literal(LiteralTokenType::String(literal));
                     let token = Token::new(token_type, lexeme, line);
-                    return CharacterScanResult::StringLiteral(token, line_count);
+                    CharacterScanResult::StringLiteral(token, line_count)
                 },
             ),
             '\n' => CharacterScanResult::NewLine,
@@ -251,7 +251,7 @@ impl<'a> Scanner<'a> {
         result
     }
 
-    fn chars_to_number(chars: &Vec<char>) -> (f64, String) {
+    fn chars_to_number(chars: &[char]) -> (f64, String) {
         let string: String = chars.iter().collect();
         (string.parse().unwrap(), string)
     }
