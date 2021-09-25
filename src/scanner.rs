@@ -195,7 +195,7 @@ impl<'a> Scanner<'a> {
                 '\n' => return None,
                 _ => {
                     if !is_advanced {
-                        return Some(TokenType::SingleChar(SingleCharTokenType::Slash))
+                        return Some(TokenType::SingleChar(SingleCharTokenType::Slash));
                     }
                 }
             }

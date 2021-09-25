@@ -1,12 +1,12 @@
 use crate::expression::{Expression, LiteralExpression};
 use crate::token::Token;
+use crate::token_type::TokenType::EOF;
 use crate::token_type::{
     Delimiter, ExpressionOperatorTokenType, KeywordTokenType, LiteralTokenType,
     SingleCharTokenType, TokenType,
 };
 use std::iter::Peekable;
 use std::slice::Iter;
-use crate::token_type::TokenType::EOF;
 
 pub struct Parser<'a> {
     tokens_iter: Peekable<Iter<'a, Token>>,
@@ -29,9 +29,7 @@ impl<'a> Parser<'a> {
                 Ok(expression) => {
                     println!("expression: {:?}", expression);
                 }
-                Err(error) if error.token.token_type == TokenType::EOF => {
-                    break
-                },
+                Err(error) if error.token.token_type == TokenType::EOF => break,
                 Err(error) => {
                     self.synchronize();
                     eprint!("{}", error.error_message());
@@ -237,9 +235,21 @@ mod tests {
     #[test]
     fn test_that_parser_generates_correct_output() {
         let tokens = vec![
-            Token::new(TokenType::Literal(LiteralTokenType::Number(125f64)), vec!['1', '2', '3'], 1),
-            Token::new(TokenType::SingleChar(SingleCharTokenType::Plus), vec!['+'], 1),
-            Token::new(TokenType::Literal(LiteralTokenType::Number(255f64)), vec!['1', '2', '3'], 1)
+            Token::new(
+                TokenType::Literal(LiteralTokenType::Number(125f64)),
+                vec!['1', '2', '3'],
+                1,
+            ),
+            Token::new(
+                TokenType::SingleChar(SingleCharTokenType::Plus),
+                vec!['+'],
+                1,
+            ),
+            Token::new(
+                TokenType::Literal(LiteralTokenType::Number(255f64)),
+                vec!['1', '2', '3'],
+                1,
+            ),
         ];
         let mut parser = Parser::new(&tokens);
         parser.parse();

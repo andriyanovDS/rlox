@@ -1,16 +1,16 @@
+use crate::parser::Parser;
 use io::{BufRead, Error, Write};
 use scanner::Scanner;
 use std::{fs, io, result::Result};
-use crate::parser::Parser;
 
 mod ast_printer;
 mod expression;
+mod interpreter;
+mod object;
 mod parser;
 mod scanner;
 mod token;
 mod token_type;
-mod interpreter;
-mod object;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");
