@@ -23,11 +23,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) {
+    pub fn parse(&mut self) -> Vec<Expression> {
+        let mut expressions: Vec<Expression> = Vec::new();
         while let result = self.expression() {
             match result {
                 Ok(expression) => {
-                    println!("expression: {:?}", expression);
+                    expressions.push(expression);
                 }
                 Err(error) if error.token.token_type == TokenType::EOF => break,
                 Err(error) => {
@@ -36,6 +37,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+        expressions
     }
 
     fn expression(&mut self) -> Result<Expression, ParseError> {

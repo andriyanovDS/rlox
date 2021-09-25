@@ -4,7 +4,7 @@ use crate::token::Token;
 use crate::token_type::{ExpressionOperatorTokenType, SingleCharTokenType, TokenType};
 use std::result::Result;
 
-struct Interpreter;
+pub struct Interpreter;
 
 struct InterpretError {
     line: u32,
@@ -24,9 +24,9 @@ impl InterpretError {
 type Res = Result<Object, InterpretError>;
 
 impl Interpreter {
-    fn interpret(&self, expression: Expression) {
+    pub fn interpret(&self, expression: Expression) {
         match expression.accept(self) {
-            Ok(object) => println!("{:?}", object),
+            Ok(object) => println!("{}", object),
             Err(error) => eprintln!("{}", error.to_error_message())
         }
     }

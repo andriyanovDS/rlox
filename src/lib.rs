@@ -2,6 +2,7 @@ use crate::parser::Parser;
 use io::{BufRead, Error, Write};
 use scanner::Scanner;
 use std::{fs, io, result::Result};
+use crate::interpreter::Interpreter;
 
 mod ast_printer;
 mod expression;
@@ -35,5 +36,9 @@ fn run_interpreter(script: String) {
     let mut scanner = Scanner::new(script.as_str());
     let tokens = scanner.scan_tokens();
     let mut parser = Parser::new(&tokens);
-    parser.parse();
+    let expressions = parser.parse();
+    let interpreter = Interpreter {};
+    for expression in expressions {
+        interpreter.interpret(expression);
+    }
 }
