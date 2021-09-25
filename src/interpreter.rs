@@ -106,10 +106,11 @@ impl Interpreter {
             (SingleCharTokenType::Plus, Object::Number(left), Object::Number(right)) => {
                 Ok(Object::Number(left + right))
             }
-            (SingleCharTokenType::Plus, Object::String(left), Object::String(right)) => {
-                let mut result_string = left.clone();
-                result_string.push_str(&right);
-                Ok(Object::String(result_string))
+            (SingleCharTokenType::Plus, Object::String(left), right) => {
+                Ok(Object::String(format!("{}{}", left, right)))
+            }
+            (SingleCharTokenType::Plus, left, Object::String(right)) => {
+                Ok(Object::String(format!("{}{}", left, right)))
             }
             (SingleCharTokenType::Plus, _, _) => Err("Operands must be two numbers or two strings"),
             _ => Err("Operands must be numbers."),
