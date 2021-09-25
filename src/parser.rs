@@ -233,27 +233,36 @@ impl ParseError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::object::Object;
 
     #[test]
-    fn test_that_parser_generates_correct_output() {
+    fn test_that_parser_generates_correct_output_for_binary_expression() {
+        let plus_token = Token::new(
+            TokenType::SingleChar(SingleCharTokenType::Plus),
+            vec!['+'],
+            1,
+        );
         let tokens = vec![
             Token::new(
-                TokenType::Literal(LiteralTokenType::Number(125f64)),
+                TokenType::Literal(LiteralTokenType::Number(123f64)),
                 vec!['1', '2', '3'],
                 1,
             ),
+            plus_token.clone(),
             Token::new(
-                TokenType::SingleChar(SingleCharTokenType::Plus),
-                vec!['+'],
-                1,
-            ),
-            Token::new(
-                TokenType::Literal(LiteralTokenType::Number(255f64)),
+                TokenType::Literal(LiteralTokenType::Number(123f64)),
                 vec!['1', '2', '3'],
                 1,
             ),
+            Token::new(TokenType::EOF, vec![], 1),
         ];
         let mut parser = Parser::new(&tokens);
-        parser.parse();
+        let expressions = parser.parse();
+        let expected_expression = Expression::Binary(
+            Box::new(Expression::Literal(LiteralExpression::Number(123f64))),
+            plus_token.clone(),
+            Box::new(Expression::Literal(LiteralExpression::Number(123f64))),
+        );
+        assert_eq!(expressions, vec![expected_expression])
     }
 }

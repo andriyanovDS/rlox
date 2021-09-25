@@ -9,7 +9,7 @@ pub trait Visitor<Result> {
     fn visit_variable(&self, literal: String) -> Result;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Expression {
     Binary(Box<Expression>, Token, Box<Expression>),
     Grouping(Box<Expression>),
@@ -18,7 +18,7 @@ pub enum Expression {
     Variable(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum LiteralExpression {
     False,
     True,

@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::Formatter;
 
+#[derive(Debug, PartialEq)]
 pub enum Object {
     Nil,
     Boolean(bool),

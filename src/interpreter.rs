@@ -94,6 +94,9 @@ impl Interpreter {
             (SingleCharTokenType::Minus, Object::Number(left), Object::Number(right)) => {
                 Ok(Object::Number(left - right))
             }
+            (SingleCharTokenType::Slash, Object::Number(_), Object::Number(0f64)) => {
+                Err("Division by zero")
+            }
             (SingleCharTokenType::Slash, Object::Number(left), Object::Number(right)) => {
                 Ok(Object::Number(left / right))
             }
