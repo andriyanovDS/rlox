@@ -1,7 +1,7 @@
 use crate::expression::{Expression, LiteralExpression};
+use crate::statement::Statement;
 use crate::token::Token;
 use crate::token_type::TokenType::EOF;
-use crate::statement::Statement;
 use crate::token_type::{
     Delimiter, ExpressionOperatorTokenType, KeywordTokenType, LiteralTokenType,
     SingleCharTokenType, TokenType,
@@ -26,8 +26,8 @@ impl<'a> Parser<'a> {
 
     pub fn parse(&mut self) -> Vec<Statement> {
         let mut statements: Vec<Statement> = Vec::new();
-        while let result = self.statement() {
-            match result {
+        loop {
+            match self.statement() {
                 Ok(expression) => {
                     statements.push(expression);
                 }
@@ -42,38 +42,30 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<Statement, ParseError> {
-         match self.tokens_iter.peek().unwrap().token_type {
-             TokenType::Keyword(KeywordTokenType::Print) => {
-                 self.advance();
-                 self.print_statement()
-             },
-             _ => self.expression_statement()
-         }
-    }
-
-    fn print_statement(&mut self) -> Result<Statement, ParseError> {
-        match self.expression() {
-            Ok(expr) => {
-                let semicolon = TokenType::SingleChar(SingleCharTokenType::Semicolon);
-                if self.next_matches_one(&semicolon) {
-                    self.advance();
-                    Ok(Statement::Print(expr))
-                } else {
-                    Err(ParseError {
-                        token: self.current.unwrap().clone(),
-                        message: "Expect ';' after return value."
-                    })
-                }
-            },
-            Err(err) => Err(err)
+        match self.tokens_iter.peek().unwrap().token_type {
+            TokenType::Keyword(KeywordTokenType::Print) => {
+                self.advance();
+                self.print_statement()
+            }
+            _ => self.expression_statement(),
         }
     }
 
-    fn expression_statement(&mut self) -> Result<Statement, ParseError> {
-        self.expression().map(|expr| Statement::Expression(expr))
+    fn print_statement(&mut self) -> Result<Statement, ParseError> {
+        self.expression()
+            .map(Statement::Print)
+            .and_then(|stmt| self.check_semicolon_after_stmt(stmt))
     }
 
-    fn expression(&mut self) -> Result<Expression, ParseError> { self.equality() }
+    fn expression_statement(&mut self) -> Result<Statement, ParseError> {
+        self.expression()
+            .map(Statement::Expression)
+            .and_then(|stmt| self.check_semicolon_after_stmt(stmt))
+    }
+
+    fn expression(&mut self) -> Result<Expression, ParseError> {
+        self.equality()
+    }
 
     fn equality(&mut self) -> Result<Expression, ParseError> {
         let token_types = vec![
@@ -228,6 +220,18 @@ impl<'a> Parser<'a> {
                     _ => continue,
                 }
             }
+        }
+    }
+
+    fn check_semicolon_after_stmt(&mut self, stmt: Statement) -> Result<Statement, ParseError> {
+        if self.next_matches_one(&TokenType::SingleChar(SingleCharTokenType::Semicolon)) {
+            self.advance();
+            Ok(stmt)
+        } else {
+            Err(ParseError {
+                token: self.current.unwrap().clone(),
+                message: "Expect ';' after return value.",
+            })
         }
     }
 }

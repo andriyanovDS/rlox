@@ -1,8 +1,8 @@
+use crate::interpreter::Interpreter;
 use crate::parser::Parser;
 use io::{BufRead, Error, Write};
 use scanner::Scanner;
 use std::{fs, io, result::Result};
-use crate::interpreter::Interpreter;
 
 mod ast_printer;
 mod expression;
@@ -10,9 +10,9 @@ mod interpreter;
 mod object;
 mod parser;
 mod scanner;
+mod statement;
 mod token;
 mod token_type;
-mod statement;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");
@@ -39,7 +39,5 @@ fn run_interpreter(script: String) {
     let mut parser = Parser::new(&tokens);
     let statements = parser.parse();
     let interpreter = Interpreter {};
-    for statement in statements {
-        interpreter.interpret(statement);
-    }
+    interpreter.interpret(&statements);
 }
