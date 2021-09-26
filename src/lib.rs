@@ -12,6 +12,7 @@ mod parser;
 mod scanner;
 mod token;
 mod token_type;
+mod statement;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");
@@ -36,9 +37,9 @@ fn run_interpreter(script: String) {
     let mut scanner = Scanner::new(script.as_str());
     let tokens = scanner.scan_tokens();
     let mut parser = Parser::new(&tokens);
-    let expressions = parser.parse();
+    let statements = parser.parse();
     let interpreter = Interpreter {};
-    for expression in expressions {
-        interpreter.interpret(expression);
+    for statement in statements {
+        interpreter.interpret(statement);
     }
 }

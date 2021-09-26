@@ -1,6 +1,7 @@
 use crate::expression::{Expression, LiteralExpression};
 use crate::token::Token;
 use crate::token_type::TokenType::EOF;
+use crate::statement::Statement;
 use crate::token_type::{
     Delimiter, ExpressionOperatorTokenType, KeywordTokenType, LiteralTokenType,
     SingleCharTokenType, TokenType,
@@ -23,12 +24,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Vec<Expression> {
-        let mut expressions: Vec<Expression> = Vec::new();
-        while let result = self.expression() {
+    pub fn parse(&mut self) -> Vec<Statement> {
+        let mut statements: Vec<Statement> = Vec::new();
+        while let result = self.statement() {
             match result {
                 Ok(expression) => {
-                    expressions.push(expression);
+                    statements.push(expression);
                 }
                 Err(error) if error.token.token_type == TokenType::EOF => break,
                 Err(error) => {
@@ -37,12 +38,42 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        expressions
+        statements
     }
 
-    fn expression(&mut self) -> Result<Expression, ParseError> {
-        self.equality()
+    fn statement(&mut self) -> Result<Statement, ParseError> {
+         match self.tokens_iter.peek().unwrap().token_type {
+             TokenType::Keyword(KeywordTokenType::Print) => {
+                 self.advance();
+                 self.print_statement()
+             },
+             _ => self.expression_statement()
+         }
     }
+
+    fn print_statement(&mut self) -> Result<Statement, ParseError> {
+        match self.expression() {
+            Ok(expr) => {
+                let semicolon = TokenType::SingleChar(SingleCharTokenType::Semicolon);
+                if self.next_matches_one(&semicolon) {
+                    self.advance();
+                    Ok(Statement::Print(expr))
+                } else {
+                    Err(ParseError {
+                        token: self.current.unwrap().clone(),
+                        message: "Expect ';' after return value."
+                    })
+                }
+            },
+            Err(err) => Err(err)
+        }
+    }
+
+    fn expression_statement(&mut self) -> Result<Statement, ParseError> {
+        self.expression().map(|expr| Statement::Expression(expr))
+    }
+
+    fn expression(&mut self) -> Result<Expression, ParseError> { self.equality() }
 
     fn equality(&mut self) -> Result<Expression, ParseError> {
         let token_types = vec![
@@ -153,6 +184,14 @@ impl<'a> Parser<'a> {
             )
         }
         Ok(expression)
+    }
+
+    fn next_matches_one(&mut self, token_type: &TokenType) -> bool {
+        if let Some(next) = self.tokens_iter.peek() {
+            &next.token_type == token_type
+        } else {
+            false
+        }
     }
 
     fn next_matches_any(&mut self, token_types: &[TokenType]) -> bool {

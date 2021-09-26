@@ -1,8 +1,9 @@
-use crate::expression::{Expression, LiteralExpression, Visitor};
+use crate::expression::{self, Expression, LiteralExpression};
 use crate::object::Object;
 use crate::token::Token;
 use crate::token_type::{ExpressionOperatorTokenType, SingleCharTokenType, TokenType};
 use std::result::Result;
+use crate::statement::{self, Statement, Visitor};
 
 pub struct Interpreter;
 
@@ -24,15 +25,25 @@ impl InterpretError {
 type Res = Result<Object, InterpretError>;
 
 impl Interpreter {
-    pub fn interpret(&self, expression: Expression) {
-        match expression.accept(self) {
+    pub fn interpret(&self, statement: Statement) {
+        match statement.accept(self) {
             Ok(object) => println!("{}", object),
             Err(error) => eprintln!("{}", error.to_error_message())
         }
     }
 }
 
-impl Visitor<Res> for Interpreter {
+impl statement::Visitor<Res> for Interpreter {
+    fn visit_print_statement(&self, expression: &Expression) -> Res {
+        expression.accept(self)
+    }
+
+    fn visit_expression_statement(&self, expression: &Expression) -> Res {
+        expression.accept(self)
+    }
+}
+
+impl expression::Visitor<Res> for Interpreter {
     fn visit_binary(&self, left: &Expression, operator: &Token, right: &Expression) -> Res {
         let left = left.accept(self)?;
         let right = right.accept(self)?;
@@ -95,7 +106,7 @@ impl Interpreter {
                 Ok(Object::Number(left - right))
             }
             (SingleCharTokenType::Slash, Object::Number(left), Object::Number(right)) => {
-                if right == 0 {
+                if *right == 0f64 {
                     Err("Division by zero")
                 } else {
                     Ok(Object::Number(left / right))
