@@ -6,8 +6,8 @@ pub enum Statement {
     Print(Expression),
     Variable {
         name: String,
-        value: Option<Expression>
-    }
+        value: Option<Expression>,
+    },
 }
 
 pub trait Visitor<T> {
@@ -21,7 +21,7 @@ impl Statement {
         match self {
             Statement::Expression(expr) => visitor.visit_expression_statement(expr),
             Statement::Print(expr) => visitor.visit_print_statement(expr),
-            Statement::Variable { name, value } => visitor.visit_variable_statement(name, value)
+            Statement::Variable { name, value } => visitor.visit_variable_statement(name, value),
         }
     }
 }

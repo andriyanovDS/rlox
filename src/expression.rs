@@ -15,10 +15,7 @@ pub enum Expression {
     Grouping(Box<Expression>),
     Literal(LiteralExpression),
     Unary(Token, Box<Expression>),
-    Variable {
-        name: String,
-        token: Token
-    },
+    Variable { name: String, token: Token },
 }
 
 #[derive(Debug, PartialEq)]

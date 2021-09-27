@@ -71,7 +71,10 @@ impl<'a> Parser<'a> {
             self.make_variable_stmt(name.to_string())
                 .and_then(|stmt| self.check_semicolon_after_stmt(stmt))
         } else {
-            Err(ParseError { token: (*token).clone(), message: "Expect variable name." })
+            Err(ParseError {
+                token: (*token).clone(),
+                message: "Expect variable name.",
+            })
         }
     }
 
@@ -80,7 +83,10 @@ impl<'a> Parser<'a> {
         if self.next_matches_one(&equal_type) {
             self.advance();
             let right = self.expression()?;
-            Ok(Statement::Variable { name, value: Some(right) })
+            Ok(Statement::Variable {
+                name,
+                value: Some(right),
+            })
         } else {
             Ok(Statement::Variable { name, value: None })
         }
@@ -275,7 +281,7 @@ impl LiteralTokenType {
         match self {
             LiteralTokenType::Identifier(name) => Expression::Variable {
                 name: name.to_string(),
-                token: token.clone()
+                token: token.clone(),
             },
             LiteralTokenType::Number(number) => {
                 Expression::Literal(LiteralExpression::Number(*number))

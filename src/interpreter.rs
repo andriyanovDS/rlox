@@ -1,9 +1,9 @@
+use crate::environment::Environment;
 use crate::expression::{self, Expression, LiteralExpression};
 use crate::object::Object;
 use crate::statement::{self, Statement};
 use crate::token::Token;
 use crate::token_type::{ExpressionOperatorTokenType, SingleCharTokenType, TokenType};
-use crate::environment::Environment;
 use std::cell::RefCell;
 use std::result;
 
@@ -32,7 +32,9 @@ type Result = result::Result<Object, InterpretError>;
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self { environment: RefCell::new(Environment::new()) }
+        Self {
+            environment: RefCell::new(Environment::new()),
+        }
     }
 
     pub fn interpret(&self, statements: &[Statement]) {
@@ -65,13 +67,15 @@ impl statement::Visitor<result::Result<(), InterpretError>> for Interpreter {
     fn visit_variable_statement(
         &self,
         name: &str,
-        value: &Option<Expression>
+        value: &Option<Expression>,
     ) -> result::Result<(), InterpretError> {
         let object = value
             .as_ref()
             .map(|expr| expr.accept(self))
             .unwrap_or(Ok(Object::Nil))?;
-        self.environment.borrow_mut().define(name.to_string(), object);
+        self.environment
+            .borrow_mut()
+            .define(name.to_string(), object);
         Ok(())
     }
 }
@@ -122,10 +126,13 @@ impl expression::Visitor<Result> for Interpreter {
     }
 
     fn visit_variable(&self, literal: &str, token: &Token) -> Result {
-        self.environment.borrow().get(literal)
+        self.environment
+            .borrow()
+            .get(literal)
             .map(|object| object.clone())
-            .map_err(|message| {
-                InterpretError { line: token.line, message }
+            .map_err(|message| InterpretError {
+                line: token.line,
+                message,
             })
     }
 }

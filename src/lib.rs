@@ -5,6 +5,7 @@ use scanner::Scanner;
 use std::{fs, io, result::Result};
 
 mod ast_printer;
+mod environment;
 mod expression;
 mod interpreter;
 mod object;
@@ -13,7 +14,6 @@ mod scanner;
 mod statement;
 mod token;
 mod token_type;
-mod environment;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");
