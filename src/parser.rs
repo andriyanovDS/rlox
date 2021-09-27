@@ -27,7 +27,7 @@ impl<'a> Parser<'a> {
     pub fn parse(&mut self) -> Vec<Statement> {
         let mut statements: Vec<Statement> = Vec::new();
         loop {
-            match self.statement() {
+            match self.declaration() {
                 Ok(expression) => {
                     statements.push(expression);
                 }
@@ -44,6 +44,7 @@ impl<'a> Parser<'a> {
     fn declaration(&mut self) -> Result<Statement, ParseError> {
         let var_token_type = TokenType::Keyword(KeywordTokenType::Var);
         if self.tokens_iter.peek().unwrap().token_type == var_token_type {
+            self.advance();
             self.variable_statement()
         } else {
             self.statement()
@@ -52,10 +53,6 @@ impl<'a> Parser<'a> {
 
     fn statement(&mut self) -> Result<Statement, ParseError> {
         match self.tokens_iter.peek().unwrap().token_type {
-            TokenType::Keyword(KeywordTokenType::Var) => {
-                self.advance();
-                self.variable_statement()
-            }
             TokenType::Keyword(KeywordTokenType::Print) => {
                 self.advance();
                 self.print_statement()
