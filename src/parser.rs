@@ -1,7 +1,6 @@
 use crate::expression::{Expression, LiteralExpression};
 use crate::statement::Statement;
 use crate::token::Token;
-use crate::token_type::TokenType::EOF;
 use crate::token_type::{
     Delimiter, ExpressionOperatorTokenType, KeywordTokenType, LiteralTokenType,
     SingleCharTokenType, TokenType,
