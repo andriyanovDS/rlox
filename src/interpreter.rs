@@ -3,20 +3,24 @@ use crate::object::Object;
 use crate::statement::{self, Statement};
 use crate::token::Token;
 use crate::token_type::{ExpressionOperatorTokenType, SingleCharTokenType, TokenType};
+use crate::environment::Environment;
+use std::cell::RefCell;
 use std::result;
 
-pub struct Interpreter;
+pub struct Interpreter {
+    environment: RefCell<Environment>,
+}
 
 struct InterpretError {
     line: u32,
-    message: &'static str,
+    message: String,
 }
 
 impl InterpretError {
     fn new(token: &Token, message: &'static str) -> Self {
         Self {
             line: token.line,
-            message,
+            message: message.to_string(),
         }
     }
     fn to_error_message(&self) -> String {
@@ -27,6 +31,10 @@ impl InterpretError {
 type Result = result::Result<Object, InterpretError>;
 
 impl Interpreter {
+    pub fn new() -> Self {
+        Self { environment: RefCell::new(Environment::new()) }
+    }
+
     pub fn interpret(&self, statements: &[Statement]) {
         for statement in statements {
             if let Err(error) = statement.accept(self) {
@@ -52,6 +60,19 @@ impl statement::Visitor<result::Result<(), InterpretError>> for Interpreter {
         expression: &Expression,
     ) -> result::Result<(), InterpretError> {
         expression.accept(self).map(|_| ())
+    }
+
+    fn visit_variable_statement(
+        &self,
+        name: &str,
+        value: &Option<Expression>
+    ) -> result::Result<(), InterpretError> {
+        let object = value
+            .as_ref()
+            .map(|expr| expr.accept(self))
+            .unwrap_or(Ok(Object::Nil))?;
+        self.environment.borrow_mut().define(name.to_string(), object);
+        Ok(())
     }
 }
 
@@ -100,11 +121,12 @@ impl expression::Visitor<Result> for Interpreter {
         }
     }
 
-    fn visit_variable(&self, _literal: String) -> Result {
-        Err(InterpretError {
-            line: 0,
-            message: "Not implemented yet",
-        })
+    fn visit_variable(&self, literal: &str, token: &Token) -> Result {
+        self.environment.borrow().get(literal)
+            .map(|object| object.clone())
+            .map_err(|message| {
+                InterpretError { line: token.line, message }
+            })
     }
 }
 

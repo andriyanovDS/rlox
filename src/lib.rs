@@ -13,6 +13,7 @@ mod scanner;
 mod statement;
 mod token;
 mod token_type;
+mod environment;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");
@@ -38,6 +39,6 @@ fn run_interpreter(script: String) {
     let tokens = scanner.scan_tokens();
     let mut parser = Parser::new(&tokens);
     let statements = parser.parse();
-    let interpreter = Interpreter {};
+    let interpreter = Interpreter::new();
     interpreter.interpret(&statements);
 }

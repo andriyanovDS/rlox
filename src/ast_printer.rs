@@ -26,8 +26,8 @@ impl Visitor<String> for AstPrinter {
         self.parenthesize(operator.lexeme.iter().collect(), vec![right])
     }
 
-    fn visit_variable(&self, literal: String) -> String {
-        literal
+    fn visit_variable(&self, literal: &str, _token: &Token) -> String {
+        literal.to_string()
     }
 }
 

@@ -41,13 +41,48 @@ impl<'a> Parser<'a> {
         statements
     }
 
+    fn declaration(&mut self) -> Result<Statement, ParseError> {
+        let var_token_type = TokenType::Keyword(KeywordTokenType::Var);
+        if self.tokens_iter.peek().unwrap().token_type == var_token_type {
+            self.variable_statement()
+        } else {
+            self.statement()
+        }
+    }
+
     fn statement(&mut self) -> Result<Statement, ParseError> {
         match self.tokens_iter.peek().unwrap().token_type {
+            TokenType::Keyword(KeywordTokenType::Var) => {
+                self.advance();
+                self.variable_statement()
+            }
             TokenType::Keyword(KeywordTokenType::Print) => {
                 self.advance();
                 self.print_statement()
             }
             _ => self.expression_statement(),
+        }
+    }
+
+    fn variable_statement(&mut self) -> Result<Statement, ParseError> {
+        let token = self.tokens_iter.peek().unwrap();
+        if let TokenType::Literal(LiteralTokenType::Identifier(ref name)) = token.token_type {
+            self.advance();
+            self.make_variable_stmt(name.to_string())
+                .and_then(|stmt| self.check_semicolon_after_stmt(stmt))
+        } else {
+            Err(ParseError { token: (*token).clone(), message: "Expect variable name." })
+        }
+    }
+
+    fn make_variable_stmt(&mut self, name: String) -> Result<Statement, ParseError> {
+        let equal_type = TokenType::ExpressionOperator(ExpressionOperatorTokenType::Equal);
+        if self.next_matches_one(&equal_type) {
+            self.advance();
+            let right = self.expression()?;
+            Ok(Statement::Variable { name, value: Some(right) })
+        } else {
+            Ok(Statement::Variable { name, value: None })
         }
     }
 
@@ -120,23 +155,22 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Result<Expression, ParseError> {
-        let next_token = self.tokens_iter.peek();
-        let next_token_type = next_token.map(|v| &v.token_type);
-        match next_token_type {
-            Some(TokenType::Literal(literal)) => {
+        let next_token = self.tokens_iter.peek().unwrap().clone();
+        match &next_token.token_type {
+            TokenType::Literal(literal) => {
                 self.advance();
-                Ok(literal.to_expression())
+                Ok(literal.to_expression(next_token))
             }
-            Some(TokenType::Keyword(keyword)) => {
+            TokenType::Keyword(keyword) => {
                 self.advance();
                 Ok(keyword.to_expression().expect("Expect expression"))
             }
-            Some(TokenType::OpenDelimiter(delimiter)) if *delimiter == Delimiter::Paren => {
+            TokenType::OpenDelimiter(delimiter) if *delimiter == Delimiter::Paren => {
                 self.advance();
                 self.find_group()
             }
             _ => Err(ParseError {
-                token: (*next_token.unwrap()).clone(),
+                token: (*next_token).clone(),
                 message: "Expected expression",
             }),
         }
@@ -237,9 +271,12 @@ impl<'a> Parser<'a> {
 }
 
 impl LiteralTokenType {
-    fn to_expression(&self) -> Expression {
+    fn to_expression(&self, token: &Token) -> Expression {
         match self {
-            LiteralTokenType::Identifier(identifier) => Expression::Variable(identifier.clone()),
+            LiteralTokenType::Identifier(name) => Expression::Variable {
+                name: name.to_string(),
+                token: token.clone()
+            },
             LiteralTokenType::Number(number) => {
                 Expression::Literal(LiteralExpression::Number(*number))
             }

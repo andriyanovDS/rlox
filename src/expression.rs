@@ -6,7 +6,7 @@ pub trait Visitor<Result> {
     fn visit_grouping(&self, expression: &Expression) -> Result;
     fn visit_literal(&self, literal: &LiteralExpression) -> Result;
     fn visit_unary(&self, operator: &Token, right: &Expression) -> Result;
-    fn visit_variable(&self, literal: String) -> Result;
+    fn visit_variable(&self, literal: &str, token: &Token) -> Result;
 }
 
 #[derive(Debug, PartialEq)]
@@ -15,7 +15,10 @@ pub enum Expression {
     Grouping(Box<Expression>),
     Literal(LiteralExpression),
     Unary(Token, Box<Expression>),
-    Variable(String),
+    Variable {
+        name: String,
+        token: Token
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -36,7 +39,7 @@ impl Expression {
             Expression::Grouping(ref expression) => visitor.visit_grouping(expression),
             Expression::Literal(ref literal) => visitor.visit_literal(literal),
             Expression::Unary(ref operator, ref right) => visitor.visit_unary(operator, right),
-            Expression::Variable(ref literal) => visitor.visit_variable(literal.clone()),
+            Expression::Variable { name, token } => visitor.visit_variable(name, token),
         }
     }
 }
