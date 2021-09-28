@@ -101,7 +101,24 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> Result<Expression, ParseError> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expression, ParseError> {
+        let left = self.equality()?;
+        let equal_token_type = TokenType::ExpressionOperator(ExpressionOperatorTokenType::Equal);
+        if self.next_matches_one(&equal_token_type) {
+            self.advance();
+            let right = self.assignment()?;
+            if let Expression::Variable { name: _, token } = left {
+                Ok(Expression::Assignment(token, Box::new(right)))
+            } else {
+                let token = self.current.unwrap();
+                Err(ParseError { token: token.clone(), message: "Invalid assignment target." })
+            }
+        } else {
+            Ok(left)
+        }
     }
 
     fn equality(&mut self) -> Result<Expression, ParseError> {
@@ -300,6 +317,7 @@ impl KeywordTokenType {
     }
 }
 
+// TODO: store token reference
 struct ParseError {
     token: Token,
     message: &'static str,

@@ -130,10 +130,15 @@ impl expression::Visitor<Result> for Interpreter {
             .borrow()
             .get(literal)
             .map(|object| object.clone())
-            .map_err(|message| InterpretError {
-                line: token.line,
-                message,
-            })
+            .map_err(|message| InterpretError { line: token.line, message })
+    }
+
+    fn visit_assignment(&self, token: &Token, right: &Expression) -> Result {
+        let object = right.accept(self)?;
+        let name: String = token.lexeme.iter().collect();
+        self.environment.borrow_mut().assign(name, object.clone())
+            .map(|()| object)
+            .map_err(|message| InterpretError { line: token.line, message })
     }
 }
 

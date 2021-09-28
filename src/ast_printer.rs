@@ -29,6 +29,10 @@ impl Visitor<String> for AstPrinter {
     fn visit_variable(&self, literal: &str, _token: &Token) -> String {
         literal.to_string()
     }
+
+    fn visit_assignment(&self, token: &Token, right: &Expression) -> String {
+        self.parenthesize(token.lexeme.iter().collect(), vec![right])
+    }
 }
 
 impl AstPrinter {

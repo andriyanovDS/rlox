@@ -21,4 +21,13 @@ impl Environment {
             .get(name)
             .ok_or(format!("Undefined variable {}.", name))
     }
+
+    pub fn assign(&mut self, name: String, value: Object) -> Result<(), String> {
+        if self.values.contains_key(&name) {
+            self.values.insert(name, value);
+            Ok(())
+        } else {
+            Err(format!("Undefined variable {}.", name))
+        }
+    }
 }
