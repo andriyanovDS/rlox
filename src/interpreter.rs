@@ -85,7 +85,10 @@ impl statement::Visitor<result::Result<(), InterpretError>> for Interpreter {
         let environment = Environment::from(self.environment.clone());
         self.environment = Rc::new(RefCell::new(environment));
         for statement in statements {
-            statement.accept(self)?;
+            if let Err(error) = statement.accept(self) {
+                self.environment = previous_env;
+                return Err(error);
+            }
         }
         self.environment = previous_env;
         Ok(())
