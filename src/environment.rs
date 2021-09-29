@@ -42,7 +42,7 @@ impl Environment {
             self.values.insert(name, value);
             return Ok(())
         }
-        let mut enclosing = self.enclosing
+        let enclosing = self.enclosing
             .as_ref()
             .map(|env| env.as_ref().borrow_mut());
         match enclosing {

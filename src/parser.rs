@@ -56,7 +56,33 @@ impl<'a> Parser<'a> {
                 self.advance();
                 self.print_statement()
             }
+            TokenType::OpenDelimiter(Delimiter::Brace) => {
+                self.advance();
+                self.block()
+            }
             _ => self.expression_statement(),
+        }
+    }
+
+    fn block(&mut self) -> Result<Statement, ParseError> {
+        let mut statements: Vec<Statement> = Vec::new();
+        loop {
+            match self.tokens_iter.peek().map(|token| &token.token_type) {
+                Some(TokenType::CloseDelimiter(Delimiter::Brace)) => {
+                    self.advance();
+                    return Ok(Statement::Block(statements))
+                }
+                Some(TokenType::EOF) => {
+                    self.advance();
+                    let error_message = "Expect '}' after block.";
+                    let token = self.current.unwrap().clone();
+                    return Err(ParseError { token, message: error_message })
+                },
+                _ => {
+                    let statement = self.declaration()?;
+                    statements.push(statement);
+                }
+            }
         }
     }
 

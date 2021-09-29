@@ -5,10 +5,11 @@ use crate::statement::{self, Statement};
 use crate::token::Token;
 use crate::token_type::{ExpressionOperatorTokenType, SingleCharTokenType, TokenType};
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::result;
 
 pub struct Interpreter {
-    environment: RefCell<Environment>,
+    environment: Rc<RefCell<Environment>>,
 }
 
 struct InterpretError {
@@ -33,11 +34,11 @@ type Result = result::Result<Object, InterpretError>;
 impl Interpreter {
     pub fn new() -> Self {
         Self {
-            environment: RefCell::new(Environment::new()),
+            environment: Rc::new(RefCell::new(Environment::new())),
         }
     }
 
-    pub fn interpret(&self, statements: &[Statement]) {
+    pub fn interpret(&mut self, statements: &[Statement]) {
         for statement in statements {
             if let Err(error) = statement.accept(self) {
                 eprintln!("{}", error.to_error_message());
@@ -47,7 +48,7 @@ impl Interpreter {
 }
 
 impl statement::Visitor<result::Result<(), InterpretError>> for Interpreter {
-    fn visit_print_statement(&self, expression: &Expression) -> result::Result<(), InterpretError> {
+    fn visit_print_statement(&mut self, expression: &Expression) -> result::Result<(), InterpretError> {
         match expression.accept(self) {
             Ok(object) => {
                 println!("{}", object);
@@ -58,14 +59,14 @@ impl statement::Visitor<result::Result<(), InterpretError>> for Interpreter {
     }
 
     fn visit_expression_statement(
-        &self,
+        &mut self,
         expression: &Expression,
     ) -> result::Result<(), InterpretError> {
         expression.accept(self).map(|_| ())
     }
 
     fn visit_variable_statement(
-        &self,
+        &mut self,
         name: &str,
         value: &Option<Expression>,
     ) -> result::Result<(), InterpretError> {
@@ -76,6 +77,17 @@ impl statement::Visitor<result::Result<(), InterpretError>> for Interpreter {
         self.environment
             .borrow_mut()
             .define(name.to_string(), object);
+        Ok(())
+    }
+
+    fn visit_block_statement(&mut self, statements: &[Statement]) -> result::Result<(), InterpretError> {
+        let previous_env = self.environment.clone();
+        let environment = Environment::from(self.environment.clone());
+        self.environment = Rc::new(RefCell::new(environment));
+        for statement in statements {
+            statement.accept(self)?;
+        }
+        self.environment = previous_env;
         Ok(())
     }
 }

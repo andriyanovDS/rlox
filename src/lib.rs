@@ -39,6 +39,6 @@ fn run_interpreter(script: String) {
     let tokens = scanner.scan_tokens();
     let mut parser = Parser::new(&tokens);
     let statements = parser.parse();
-    let interpreter = Interpreter::new();
+    let mut interpreter = Interpreter::new();
     interpreter.interpret(&statements);
 }
