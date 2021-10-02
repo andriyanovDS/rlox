@@ -17,6 +17,9 @@ struct InterpretError {
     message: String,
 }
 
+type StmtInterpretResult = Result<(), InterpretError>;
+type ExprInterpretResult = Result<Object, InterpretError>;
+
 impl InterpretError {
     fn new(token: &Token, message: &'static str) -> Self {
         Self {
@@ -28,8 +31,6 @@ impl InterpretError {
         format!("[line: {}] {}", self.line, self.message)
     }
 }
-
-type Result = result::Result<Object, InterpretError>;
 
 impl Interpreter {
     pub fn new() -> Self {
@@ -47,8 +48,8 @@ impl Interpreter {
     }
 }
 
-impl statement::Visitor<result::Result<(), InterpretError>> for Interpreter {
-    fn visit_print_statement(&mut self, expression: &Expression) -> result::Result<(), InterpretError> {
+impl statement::Visitor<StmtInterpretResult> for Interpreter {
+    fn visit_print_statement(&mut self, expression: &Expression) -> StmtInterpretResult {
         match expression.accept(self) {
             Ok(object) => {
                 println!("{}", object);
@@ -61,7 +62,7 @@ impl statement::Visitor<result::Result<(), InterpretError>> for Interpreter {
     fn visit_expression_statement(
         &mut self,
         expression: &Expression,
-    ) -> result::Result<(), InterpretError> {
+    ) -> StmtInterpretResult {
         expression.accept(self).map(|_| ())
     }
 
@@ -69,18 +70,18 @@ impl statement::Visitor<result::Result<(), InterpretError>> for Interpreter {
         &mut self,
         name: &str,
         value: &Option<Expression>,
-    ) -> result::Result<(), InterpretError> {
+    ) -> StmtInterpretResult {
         let object = value
             .as_ref()
             .map(|expr| expr.accept(self))
-            .unwrap_or(Ok(Object::Nil))?;
+            .unwrap_or(Ok(Object::NotInitialized))?;
         self.environment
             .borrow_mut()
             .define(name.to_string(), object);
         Ok(())
     }
 
-    fn visit_block_statement(&mut self, statements: &[Statement]) -> result::Result<(), InterpretError> {
+    fn visit_block_statement(&mut self, statements: &[Statement]) -> StmtInterpretResult {
         let previous_env = self.environment.clone();
         let environment = Environment::from(self.environment.clone());
         self.environment = Rc::new(RefCell::new(environment));
@@ -95,8 +96,8 @@ impl statement::Visitor<result::Result<(), InterpretError>> for Interpreter {
     }
 }
 
-impl expression::Visitor<Result> for Interpreter {
-    fn visit_binary(&self, left: &Expression, operator: &Token, right: &Expression) -> Result {
+impl expression::Visitor<ExprInterpretResult> for Interpreter {
+    fn visit_binary(&self, left: &Expression, operator: &Token, right: &Expression) -> ExprInterpretResult {
         let left = left.accept(self)?;
         let right = right.accept(self)?;
         match operator.token_type {
@@ -112,11 +113,11 @@ impl expression::Visitor<Result> for Interpreter {
         }
     }
 
-    fn visit_grouping(&self, expression: &Expression) -> Result {
+    fn visit_grouping(&self, expression: &Expression) -> ExprInterpretResult {
         expression.accept(self)
     }
 
-    fn visit_literal(&self, literal: &LiteralExpression) -> Result {
+    fn visit_literal(&self, literal: &LiteralExpression) -> ExprInterpretResult {
         let object = match literal {
             LiteralExpression::Nil => Object::Nil,
             LiteralExpression::False => Object::Boolean(false),
@@ -127,7 +128,7 @@ impl expression::Visitor<Result> for Interpreter {
         Ok(object)
     }
 
-    fn visit_unary(&self, operator: &Token, right: &Expression) -> Result {
+    fn visit_unary(&self, operator: &Token, right: &Expression) -> ExprInterpretResult {
         let right = right.accept(self)?;
         match (&operator.token_type, right) {
             (&TokenType::SingleChar(SingleCharTokenType::Minus), Object::Number(number)) => {
@@ -140,7 +141,7 @@ impl expression::Visitor<Result> for Interpreter {
         }
     }
 
-    fn visit_variable(&self, literal: &str, token: &Token) -> Result {
+    fn visit_variable(&self, literal: &str, token: &Token) -> ExprInterpretResult {
         self.environment
             .borrow()
             .get(literal)
@@ -148,7 +149,7 @@ impl expression::Visitor<Result> for Interpreter {
             .map_err(|message| InterpretError { line: token.line, message })
     }
 
-    fn visit_assignment(&self, token: &Token, right: &Expression) -> Result {
+    fn visit_assignment(&self, token: &Token, right: &Expression) -> ExprInterpretResult {
         let object = right.accept(self)?;
         let name: String = token.lexeme.iter().collect();
         self.environment.borrow_mut().assign(name, object.clone())

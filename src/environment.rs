@@ -31,10 +31,14 @@ impl Environment {
         self.values
             .get(name)
             .map(|obj| Ok(obj.clone()))
-            .or_else(|| {
-                self.get_from_enclosing(name)
-            })
+            .or_else(|| self.get_from_enclosing(name))
             .unwrap_or_else(|| Err(format!("Undefined variable {}.", name)))
+            .and_then(|obj| {
+                match obj {
+                    Object::NotInitialized => Err(format!("Variable {} must be initialized before use.", name)),
+                    _ => Ok(obj)
+                }
+            })
     }
 
     pub fn assign(&mut self, name: String, value: Object) -> Result<(), String> {
