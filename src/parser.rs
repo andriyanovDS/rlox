@@ -75,12 +75,12 @@ impl<'a> Parser<'a> {
             match self.tokens_iter.peek().map(|token| &token.token_type) {
                 Some(TokenType::CloseDelimiter(Delimiter::Brace)) => {
                     self.advance();
-                    return Ok(Statement::Block(statements))
+                    return Ok(Statement::Block(statements));
                 }
                 Some(TokenType::EOF) => {
                     self.advance();
-                    return Err(self.make_error("Expect '}' after block."))
-                },
+                    return Err(self.make_error("Expect '}' after block."));
+                }
                 _ => {
                     let statement = self.declaration()?;
                     statements.push(statement);
@@ -121,22 +121,22 @@ impl<'a> Parser<'a> {
         let condition: Expression = self.advance_when_match(
             TokenType::OpenDelimiter(Delimiter::Paren),
             Parser::expression,
-            |parser| Err(parser.make_error("Expect '(' after 'if'."))
+            |parser| Err(parser.make_error("Expect '(' after 'if'.")),
         )?;
         let then_branch: Statement = self.advance_when_match(
             TokenType::CloseDelimiter(Delimiter::Paren),
             Parser::statement,
-            |parser| Err(parser.make_error("Expect ')' after if condition."))
+            |parser| Err(parser.make_error("Expect ')' after if condition.")),
         )?;
         let else_branch: Option<Statement> = self.advance_when_match(
             TokenType::Keyword(KeywordTokenType::Else),
             |parser| parser.statement().map(Some),
-            |_| Ok(None)
+            |_| Ok(None),
         )?;
         Ok(Statement::If {
             condition,
             then_branch: Box::new(then_branch),
-            else_branch: else_branch.map(Box::new)
+            else_branch: else_branch.map(Box::new),
         })
     }
 
@@ -249,7 +249,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 self.find_group()
             }
-            _ => Err(ParseError { token: next_token.clone(), message: "Expected expression" }),
+            _ => Err(ParseError {
+                token: next_token.clone(),
+                message: "Expected expression",
+            }),
         }
     }
 
@@ -274,8 +277,9 @@ impl<'a> Parser<'a> {
         expr_factory: EF,
         token_types: &[TokenType],
     ) -> ParseExprResult
-        where EL: Fn(&mut Parser<'a>) -> ParseExprResult,
-              EF: Fn(Box<Expression>, Token, Box<Expression>) -> Expression
+    where
+        EL: Fn(&mut Parser<'a>) -> ParseExprResult,
+        EF: Fn(Box<Expression>, Token, Box<Expression>) -> Expression,
     {
         let mut expression = expr_lookup(self)?;
         while self.next_matches_any(token_types) {
@@ -313,12 +317,11 @@ impl<'a> Parser<'a> {
         self.current
     }
 
-    fn advance_when_match<F, R, E>(
-        &mut self,
-        token_type: TokenType,
-        next_step: F,
-        else_fn: E
-    ) -> R where F: Fn(&mut Self) -> R, E: Fn(&Self) -> R {
+    fn advance_when_match<F, R, E>(&mut self, token_type: TokenType, next_step: F, else_fn: E) -> R
+    where
+        F: Fn(&mut Self) -> R,
+        E: Fn(&Self) -> R,
+    {
         if self.next_matches_one(token_type) {
             self.advance();
             next_step(self)
@@ -328,7 +331,10 @@ impl<'a> Parser<'a> {
     }
 
     fn make_error(&self, message: &'static str) -> ParseError {
-        ParseError { token: self.current.unwrap().clone(), message }
+        ParseError {
+            token: self.current.unwrap().clone(),
+            message,
+        }
     }
 
     fn synchronize(&mut self) {

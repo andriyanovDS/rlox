@@ -1,7 +1,7 @@
 use crate::object::Object;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 pub struct Environment {
     values: HashMap<String, Object>,
@@ -12,14 +12,14 @@ impl Environment {
     pub fn new() -> Self {
         Self {
             values: HashMap::new(),
-            enclosing: None
+            enclosing: None,
         }
     }
 
     pub fn from(enclosing: Rc<RefCell<Environment>>) -> Self {
         Self {
             values: HashMap::new(),
-            enclosing: Some(enclosing)
+            enclosing: Some(enclosing),
         }
     }
 
@@ -33,25 +33,23 @@ impl Environment {
             .map(|obj| Ok(obj.clone()))
             .or_else(|| self.get_from_enclosing(name))
             .unwrap_or_else(|| Err(format!("Undefined variable {}.", name)))
-            .and_then(|obj| {
-                match obj {
-                    Object::NotInitialized => Err(format!("Variable {} must be initialized before use.", name)),
-                    _ => Ok(obj)
+            .and_then(|obj| match obj {
+                Object::NotInitialized => {
+                    Err(format!("Variable {} must be initialized before use.", name))
                 }
+                _ => Ok(obj),
             })
     }
 
     pub fn assign(&mut self, name: String, value: Object) -> Result<(), String> {
         if self.values.contains_key(&name) {
             self.values.insert(name, value);
-            return Ok(())
+            return Ok(());
         }
-        let enclosing = self.enclosing
-            .as_ref()
-            .map(|env| env.as_ref().borrow_mut());
+        let enclosing = self.enclosing.as_ref().map(|env| env.as_ref().borrow_mut());
         match enclosing {
             Some(mut enclosing) => enclosing.assign(name, value),
-            None => Err(format!("Undefined variable {}.", name))
+            None => Err(format!("Undefined variable {}.", name)),
         }
     }
 

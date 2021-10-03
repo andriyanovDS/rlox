@@ -19,7 +19,7 @@ pub enum Expression {
     Unary(Token, Box<Expression>),
     Variable { name: String, token: Token },
     Assignment(Token, Box<Expression>),
-    Logical(Box<Expression>, Token, Box<Expression>)
+    Logical(Box<Expression>, Token, Box<Expression>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -34,15 +34,15 @@ pub enum LiteralExpression {
 impl Expression {
     pub fn accept<T, V: Visitor<T>>(&self, visitor: &V) -> T {
         match self {
-            Expression::Binary(left, operator, right) =>
-                visitor.visit_binary(left, operator, right),
+            Expression::Binary(left, operator, right) => {
+                visitor.visit_binary(left, operator, right)
+            }
             Expression::Grouping(expression) => visitor.visit_grouping(expression),
             Expression::Literal(literal) => visitor.visit_literal(literal),
             Expression::Unary(operator, right) => visitor.visit_unary(operator, right),
             Expression::Variable { name, token } => visitor.visit_variable(name, token),
-            Expression::Assignment(token,  expr) => visitor.visit_assignment(token, expr),
-            Expression::Logical(left, token, right) =>
-                visitor.visit_logical(left, token, right),
+            Expression::Assignment(token, expr) => visitor.visit_assignment(token, expr),
+            Expression::Logical(left, token, right) => visitor.visit_logical(left, token, right),
         }
     }
 }

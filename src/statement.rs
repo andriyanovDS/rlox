@@ -12,7 +12,7 @@ pub enum Statement {
     If {
         condition: Expression,
         then_branch: Box<Statement>,
-        else_branch: Option<Box<Statement>>
+        else_branch: Option<Box<Statement>>,
     },
 }
 
@@ -25,7 +25,7 @@ pub trait Visitor<T> {
         &mut self,
         condition: &Expression,
         then_branch: &Statement,
-        else_branch: &Option<Box<Statement>>
+        else_branch: &Option<Box<Statement>>,
     ) -> T;
 }
 
@@ -36,8 +36,11 @@ impl Statement {
             Statement::Print(expr) => visitor.visit_print_statement(expr),
             Statement::Variable { name, value } => visitor.visit_variable_statement(name, value),
             Statement::Block(statements) => visitor.visit_block_statement(statements),
-            Statement::If { condition, then_branch, else_branch } =>
-                visitor.visit_if_statement(condition, then_branch, else_branch),
+            Statement::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => visitor.visit_if_statement(condition, then_branch, else_branch),
         }
     }
 }

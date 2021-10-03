@@ -3,7 +3,9 @@ use crate::expression::{self, Expression, LiteralExpression};
 use crate::object::Object;
 use crate::statement::{self, Statement};
 use crate::token::Token;
-use crate::token_type::{ExpressionOperatorTokenType, SingleCharTokenType, TokenType, KeywordTokenType};
+use crate::token_type::{
+    ExpressionOperatorTokenType, KeywordTokenType, SingleCharTokenType, TokenType,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::result;
@@ -59,10 +61,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         }
     }
 
-    fn visit_expression_statement(
-        &mut self,
-        expression: &Expression,
-    ) -> StmtInterpretResult {
+    fn visit_expression_statement(&mut self, expression: &Expression) -> StmtInterpretResult {
         expression.accept(self).map(|_| ())
     }
 
@@ -99,7 +98,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         &mut self,
         condition: &Expression,
         then_branch: &Statement,
-        else_branch: &Option<Box<Statement>>
+        else_branch: &Option<Box<Statement>>,
     ) -> StmtInterpretResult {
         let object = condition.accept(self)?;
         if object.is_truthy() {
@@ -114,7 +113,12 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
 }
 
 impl expression::Visitor<ExprInterpretResult> for Interpreter {
-    fn visit_binary(&self, left: &Expression, operator: &Token, right: &Expression) -> ExprInterpretResult {
+    fn visit_binary(
+        &self,
+        left: &Expression,
+        operator: &Token,
+        right: &Expression,
+    ) -> ExprInterpretResult {
         let left = left.accept(self)?;
         let right = right.accept(self)?;
         match operator.token_type {
@@ -164,23 +168,36 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
             .borrow()
             .get(literal)
             .map(|object| object.clone())
-            .map_err(|message| InterpretError { line: token.line, message })
+            .map_err(|message| InterpretError {
+                line: token.line,
+                message,
+            })
     }
 
     fn visit_assignment(&self, token: &Token, right: &Expression) -> ExprInterpretResult {
         let object = right.accept(self)?;
         let name: String = token.lexeme.iter().collect();
-        self.environment.borrow_mut().assign(name, object.clone())
+        self.environment
+            .borrow_mut()
+            .assign(name, object.clone())
             .map(|()| object)
-            .map_err(|message| InterpretError { line: token.line, message })
+            .map_err(|message| InterpretError {
+                line: token.line,
+                message,
+            })
     }
 
-    fn visit_logical(&self, left: &Expression, operator: &Token, right: &Expression) -> ExprInterpretResult {
+    fn visit_logical(
+        &self,
+        left: &Expression,
+        operator: &Token,
+        right: &Expression,
+    ) -> ExprInterpretResult {
         let left = left.accept(self)?;
         match operator.token_type {
             TokenType::Keyword(KeywordTokenType::Or) if left.is_truthy() => Ok(left),
             TokenType::Keyword(KeywordTokenType::And) if !left.is_truthy() => Ok(left),
-            _ => right.accept(self)
+            _ => right.accept(self),
         }
     }
 }
