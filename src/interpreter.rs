@@ -3,7 +3,7 @@ use crate::expression::{self, Expression, LiteralExpression};
 use crate::object::Object;
 use crate::statement::{self, Statement};
 use crate::token::Token;
-use crate::token_type::{ExpressionOperatorTokenType, SingleCharTokenType, TokenType};
+use crate::token_type::{ExpressionOperatorTokenType, SingleCharTokenType, TokenType, KeywordTokenType};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::result;
@@ -173,6 +173,15 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
         self.environment.borrow_mut().assign(name, object.clone())
             .map(|()| object)
             .map_err(|message| InterpretError { line: token.line, message })
+    }
+
+    fn visit_logical(&self, left: &Expression, operator: &Token, right: &Expression) -> ExprInterpretResult {
+        let left = left.accept(self)?;
+        match operator.token_type {
+            TokenType::Keyword(KeywordTokenType::Or) if left.is_truthy() => Ok(left),
+            TokenType::Keyword(KeywordTokenType::And) if !left.is_truthy() => Ok(left),
+            _ => right.accept(self)
+        }
     }
 }
 

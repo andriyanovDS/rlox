@@ -157,7 +157,7 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment(&mut self) -> ParseExprResult {
-        let left = self.equality()?;
+        let left = self.logical_or()?;
         let equal_token_type = TokenType::ExpressionOperator(ExpressionOperatorTokenType::Equal);
         if self.next_matches_one(equal_token_type) {
             self.advance();
@@ -172,12 +172,22 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn logical_or(&mut self) -> ParseExprResult {
+        let token_type = TokenType::Keyword(KeywordTokenType::Or);
+        self.find_binary_expression(Parser::logical_and, Expression::Logical, &[token_type])
+    }
+
+    fn logical_and(&mut self) -> ParseExprResult {
+        let token_type = TokenType::Keyword(KeywordTokenType::And);
+        self.find_binary_expression(Parser::equality, Expression::Logical, &[token_type])
+    }
+
     fn equality(&mut self) -> ParseExprResult {
         let token_types = vec![
             TokenType::ExpressionOperator(ExpressionOperatorTokenType::NotEqual),
             TokenType::ExpressionOperator(ExpressionOperatorTokenType::EqualEqual),
         ];
-        self.find_binary_expression(Parser::comparison, &token_types)
+        self.find_binary_expression(Parser::comparison, Expression::Binary, &token_types)
     }
 
     fn comparison(&mut self) -> ParseExprResult {
@@ -187,7 +197,7 @@ impl<'a> Parser<'a> {
             TokenType::ExpressionOperator(ExpressionOperatorTokenType::Less),
             TokenType::ExpressionOperator(ExpressionOperatorTokenType::LessEqual),
         ];
-        self.find_binary_expression(Parser::term, &token_types)
+        self.find_binary_expression(Parser::term, Expression::Binary, &token_types)
     }
 
     fn term(&mut self) -> ParseExprResult {
@@ -195,7 +205,7 @@ impl<'a> Parser<'a> {
             TokenType::SingleChar(SingleCharTokenType::Minus),
             TokenType::SingleChar(SingleCharTokenType::Plus),
         ];
-        self.find_binary_expression(Parser::factor, &token_types)
+        self.find_binary_expression(Parser::factor, Expression::Binary, &token_types)
     }
 
     fn factor(&mut self) -> ParseExprResult {
@@ -203,7 +213,7 @@ impl<'a> Parser<'a> {
             TokenType::SingleChar(SingleCharTokenType::Slash),
             TokenType::SingleChar(SingleCharTokenType::Star),
         ];
-        self.find_binary_expression(Parser::unary, &token_types)
+        self.find_binary_expression(Parser::unary, Expression::Binary, &token_types)
     }
 
     fn unary(&mut self) -> ParseExprResult {
@@ -258,18 +268,22 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn find_binary_expression<F>(
+    fn find_binary_expression<EL, EF>(
         &mut self,
-        expression_factory: F,
+        expr_lookup: EL,
+        expr_factory: EF,
         token_types: &[TokenType],
-    ) -> ParseExprResult where F: Fn(&mut Parser<'a>) -> ParseExprResult  {
-        let mut expression = expression_factory(self)?;
+    ) -> ParseExprResult
+        where EL: Fn(&mut Parser<'a>) -> ParseExprResult,
+              EF: Fn(Box<Expression>, Token, Box<Expression>) -> Expression
+    {
+        let mut expression = expr_lookup(self)?;
         while self.next_matches_any(token_types) {
             self.advance();
             let operator = self.current.unwrap();
 
-            let right_expression = expression_factory(self)?;
-            expression = Expression::Binary(
+            let right_expression = expr_lookup(self)?;
+            expression = expr_factory(
                 Box::new(expression),
                 operator.clone(),
                 Box::new(right_expression),

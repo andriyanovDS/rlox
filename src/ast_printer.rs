@@ -33,6 +33,10 @@ impl Visitor<String> for AstPrinter {
     fn visit_assignment(&self, token: &Token, right: &Expression) -> String {
         self.parenthesize(token.lexeme.iter().collect(), vec![right])
     }
+
+    fn visit_logical(&self, left: &Expression, operator: &Token, right: &Expression) -> String {
+        self.parenthesize(operator.lexeme.iter().collect(), vec![left, right])
+    }
 }
 
 impl AstPrinter {
