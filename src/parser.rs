@@ -53,6 +53,10 @@ impl<'a> Parser<'a> {
 
     fn statement(&mut self) -> Result<Statement, ParseError> {
         match self.tokens_iter.peek().unwrap().token_type {
+            TokenType::Keyword(KeywordTokenType::For) => {
+                self.advance();
+                self.for_statement()
+            }
             TokenType::Keyword(KeywordTokenType::If) => {
                 self.advance();
                 self.if_statement()
@@ -118,6 +122,67 @@ impl<'a> Parser<'a> {
             })
         } else {
             Ok(Statement::Variable { name, value: None })
+        }
+    }
+
+    fn for_statement(&mut self) -> ParseStmtResult {
+        self.advance_when_match(
+            TokenType::OpenDelimiter(Delimiter::Paren),
+            |_| Ok(()),
+            |parser| Err(parser.make_error("Expect '(' after 'for'."))
+        )?;
+        let initializer = self.parse_for_initializer()?;
+        let condition = self.parse_for_expression(
+            TokenType::SingleChar(SingleCharTokenType::Semicolon),
+            || "Expect ';' after loop condition."
+        )?;
+        let increment = self.parse_for_expression(
+            TokenType::CloseDelimiter(Delimiter::Paren),
+            || "Expect ')' after for clauses."
+        )?;
+        let body = self.statement()?;
+        let loop_body: Statement = match increment {
+            Some(expr) => Statement::Block(vec![body, Statement::Expression(expr)]),
+            None => Statement::Block(vec![body])
+        };
+        let loop_condition = condition.unwrap_or(Expression::Literal(LiteralExpression::True));
+        let while_loop = Statement::While { condition: loop_condition, body: Box::new(loop_body) };
+        match initializer {
+            Some(stmt) => Ok(Statement::Block(vec![stmt, while_loop])),
+            None => Ok(while_loop)
+        }
+    }
+
+    fn parse_for_initializer(&mut self) -> Result<Option<Statement>, ParseError> {
+        let next_token = self.tokens_iter.peek().unwrap();
+        match next_token.token_type {
+            TokenType::SingleChar(SingleCharTokenType::Semicolon) => {
+                self.advance();
+                Ok(None)
+            },
+            TokenType::Keyword(KeywordTokenType::Var) => {
+                self.advance();
+                self.variable_statement().map(Some)
+            },
+            _ => self.expression_statement().map(Some)
+        }
+    }
+
+    fn parse_for_expression<EF>(
+        &mut self,
+        token_type: TokenType,
+        err_message_provider: EF
+    ) -> Result<Option<Expression>, ParseError> where EF: Fn() -> &'static str {
+        if self.tokens_iter.peek().unwrap().token_type == token_type {
+            self.advance();
+            Ok(None)
+        } else {
+            let expression = self.expression()?;
+            self.advance_when_match(
+                token_type,
+                move |_| Ok(Some(expression)),
+                |parser| Err(parser.make_error(err_message_provider()))
+            )
         }
     }
 
@@ -337,8 +402,8 @@ impl<'a> Parser<'a> {
 
     fn advance_when_match<F, R, E>(&mut self, token_type: TokenType, next_step: F, else_fn: E) -> R
     where
-        F: Fn(&mut Self) -> R,
-        E: Fn(&Self) -> R,
+        F: FnOnce(&mut Self) -> R,
+        E: FnOnce(&Self) -> R,
     {
         if self.next_matches_one(token_type) {
             self.advance();
