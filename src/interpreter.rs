@@ -51,7 +51,7 @@ impl Interpreter {
 }
 
 impl statement::Visitor<StmtInterpretResult> for Interpreter {
-    fn visit_print_statement(&mut self, expression: &Expression) -> StmtInterpretResult {
+    fn visit_print(&mut self, expression: &Expression) -> StmtInterpretResult {
         match expression.accept(self) {
             Ok(object) => {
                 println!("{}", object);
@@ -61,11 +61,11 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         }
     }
 
-    fn visit_expression_statement(&mut self, expression: &Expression) -> StmtInterpretResult {
+    fn visit_expression(&mut self, expression: &Expression) -> StmtInterpretResult {
         expression.accept(self).map(|_| ())
     }
 
-    fn visit_variable_statement(
+    fn visit_variable(
         &mut self,
         name: &str,
         value: &Option<Expression>,
@@ -80,7 +80,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         Ok(())
     }
 
-    fn visit_block_statement(&mut self, statements: &[Statement]) -> StmtInterpretResult {
+    fn visit_block(&mut self, statements: &[Statement]) -> StmtInterpretResult {
         let previous_env = self.environment.clone();
         let environment = Environment::from(self.environment.clone());
         self.environment = Rc::new(RefCell::new(environment));
@@ -94,7 +94,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         Ok(())
     }
 
-    fn visit_if_statement(
+    fn visit_if(
         &mut self,
         condition: &Expression,
         then_branch: &Statement,
@@ -108,6 +108,17 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
                 .as_ref()
                 .map(|stmt| stmt.as_ref().accept(self))
                 .unwrap_or(Ok(()))
+        }
+    }
+
+    fn visit_while(&mut self, condition: &Expression, body: &Statement) -> StmtInterpretResult {
+        loop {
+            let condition = condition.accept(self)?;
+            if condition.is_truthy() {
+                body.accept(self)?;
+            } else {
+                return Ok(())
+            }
         }
     }
 }

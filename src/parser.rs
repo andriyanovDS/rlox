@@ -61,6 +61,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 self.print_statement()
             }
+            TokenType::Keyword(KeywordTokenType::While) => {
+                self.advance();
+                self.while_statement()
+            }
             TokenType::OpenDelimiter(Delimiter::Brace) => {
                 self.advance();
                 self.block()
@@ -144,6 +148,20 @@ impl<'a> Parser<'a> {
         self.expression()
             .map(Statement::Print)
             .and_then(|stmt| self.check_semicolon_after_stmt(stmt))
+    }
+
+    fn while_statement(&mut self) -> ParseStmtResult {
+        let condition: Expression = self.advance_when_match(
+            TokenType::OpenDelimiter(Delimiter::Paren),
+            Parser::expression,
+            |parser| Err(parser.make_error("Expect '(' after 'while'."))
+        )?;
+        let body: Statement = self.advance_when_match(
+            TokenType::CloseDelimiter(Delimiter::Paren),
+            Parser::statement,
+            |parser| Err(parser.make_error("Expect ')' after condition."))
+        )?;
+        Ok(Statement::While { condition, body: Box::new(body) })
     }
 
     fn expression_statement(&mut self) -> ParseStmtResult {
