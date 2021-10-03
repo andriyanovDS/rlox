@@ -1,6 +1,7 @@
 use crate::object::Object;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map};
+use hash_map::Entry;
 use std::rc::Rc;
 
 pub struct Environment {
@@ -42,8 +43,8 @@ impl Environment {
     }
 
     pub fn assign(&mut self, name: String, value: Object) -> Result<(), String> {
-        if self.values.contains_key(&name) {
-            self.values.insert(name, value);
+        if let Entry::Occupied(mut entry) = self.values.entry(name.clone()) {
+            entry.insert(value);
             return Ok(());
         }
         let enclosing = self.enclosing.as_ref().map(|env| env.as_ref().borrow_mut());

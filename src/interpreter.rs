@@ -167,7 +167,6 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
             .as_ref()
             .borrow()
             .get(literal)
-            .map(|object| object.clone())
             .map_err(|message| InterpretError {
                 line: token.line,
                 message,

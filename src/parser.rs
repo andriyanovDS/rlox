@@ -235,7 +235,7 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> ParseExprResult {
-        let next_token = self.tokens_iter.peek().unwrap().clone();
+        let next_token = *(self.tokens_iter.peek().unwrap());
         match &next_token.token_type {
             TokenType::Literal(literal) => {
                 self.advance();
