@@ -11,15 +11,16 @@ use std::slice::Iter;
 pub struct Parser<'a> {
     tokens_iter: Peekable<Iter<'a, Token>>,
     current: Option<&'a Token>,
-    previous: Option<&'a Token>,
 }
+
+type ParseStmtResult = Result<Statement, ParseError>;
+type ParseExprResult = Result<Expression, ParseError>;
 
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a [Token]) -> Self {
         Self {
             tokens_iter: tokens.iter().peekable(),
             current: None,
-            previous: None,
         }
     }
 
@@ -52,6 +53,10 @@ impl<'a> Parser<'a> {
 
     fn statement(&mut self) -> Result<Statement, ParseError> {
         match self.tokens_iter.peek().unwrap().token_type {
+            TokenType::Keyword(KeywordTokenType::If) => {
+                self.advance();
+                self.if_statement()
+            }
             TokenType::Keyword(KeywordTokenType::Print) => {
                 self.advance();
                 self.print_statement()
@@ -64,7 +69,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn block(&mut self) -> Result<Statement, ParseError> {
+    fn block(&mut self) -> ParseStmtResult {
         let mut statements: Vec<Statement> = Vec::new();
         loop {
             match self.tokens_iter.peek().map(|token| &token.token_type) {
@@ -74,9 +79,7 @@ impl<'a> Parser<'a> {
                 }
                 Some(TokenType::EOF) => {
                     self.advance();
-                    let error_message = "Expect '}' after block.";
-                    let token = self.current.unwrap().clone();
-                    return Err(ParseError { token, message: error_message })
+                    return Err(self.make_error("Expect '}' after block."))
                 },
                 _ => {
                     let statement = self.declaration()?;
@@ -86,7 +89,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn variable_statement(&mut self) -> Result<Statement, ParseError> {
+    fn variable_statement(&mut self) -> ParseStmtResult {
         let token = self.tokens_iter.peek().unwrap();
         if let TokenType::Literal(LiteralTokenType::Identifier(ref name)) = token.token_type {
             self.advance();
@@ -100,9 +103,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn make_variable_stmt(&mut self, name: String) -> Result<Statement, ParseError> {
+    fn make_variable_stmt(&mut self, name: String) -> ParseStmtResult {
         let equal_type = TokenType::ExpressionOperator(ExpressionOperatorTokenType::Equal);
-        if self.next_matches_one(&equal_type) {
+        if self.next_matches_one(equal_type) {
             self.advance();
             let right = self.expression()?;
             Ok(Statement::Variable {
@@ -114,40 +117,62 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn print_statement(&mut self) -> Result<Statement, ParseError> {
+    fn if_statement(&mut self) -> ParseStmtResult {
+        let condition: Expression = self.advance_when_match(
+            TokenType::OpenDelimiter(Delimiter::Paren),
+            Parser::expression,
+            |parser| Err(parser.make_error("Expect '(' after 'if'."))
+        )?;
+        let then_branch: Statement = self.advance_when_match(
+            TokenType::CloseDelimiter(Delimiter::Paren),
+            Parser::statement,
+            |parser| Err(parser.make_error("Expect ')' after if condition."))
+        )?;
+        let else_branch: Option<Statement> = self.advance_when_match(
+            TokenType::Keyword(KeywordTokenType::Else),
+            |parser| parser.statement().map(Some),
+            |_| Ok(None)
+        )?;
+        Ok(Statement::If {
+            condition,
+            then_branch: Box::new(then_branch),
+            else_branch: else_branch.map(Box::new)
+        })
+    }
+
+    fn print_statement(&mut self) -> ParseStmtResult {
         self.expression()
             .map(Statement::Print)
             .and_then(|stmt| self.check_semicolon_after_stmt(stmt))
     }
 
-    fn expression_statement(&mut self) -> Result<Statement, ParseError> {
+    fn expression_statement(&mut self) -> ParseStmtResult {
         self.expression()
             .map(Statement::Expression)
             .and_then(|stmt| self.check_semicolon_after_stmt(stmt))
     }
 
-    fn expression(&mut self) -> Result<Expression, ParseError> {
+    fn expression(&mut self) -> ParseExprResult {
         self.assignment()
     }
 
-    fn assignment(&mut self) -> Result<Expression, ParseError> {
+    fn assignment(&mut self) -> ParseExprResult {
         let left = self.equality()?;
         let equal_token_type = TokenType::ExpressionOperator(ExpressionOperatorTokenType::Equal);
-        if self.next_matches_one(&equal_token_type) {
+        if self.next_matches_one(equal_token_type) {
             self.advance();
             let right = self.assignment()?;
             if let Expression::Variable { name: _, token } = left {
                 Ok(Expression::Assignment(token, Box::new(right)))
             } else {
-                let token = self.current.unwrap();
-                Err(ParseError { token: token.clone(), message: "Invalid assignment target." })
+                Err(self.make_error("Invalid assignment target."))
             }
         } else {
             Ok(left)
         }
     }
 
-    fn equality(&mut self) -> Result<Expression, ParseError> {
+    fn equality(&mut self) -> ParseExprResult {
         let token_types = vec![
             TokenType::ExpressionOperator(ExpressionOperatorTokenType::NotEqual),
             TokenType::ExpressionOperator(ExpressionOperatorTokenType::EqualEqual),
@@ -155,7 +180,7 @@ impl<'a> Parser<'a> {
         self.find_binary_expression(Parser::comparison, &token_types)
     }
 
-    fn comparison(&mut self) -> Result<Expression, ParseError> {
+    fn comparison(&mut self) -> ParseExprResult {
         let token_types = vec![
             TokenType::ExpressionOperator(ExpressionOperatorTokenType::Greater),
             TokenType::ExpressionOperator(ExpressionOperatorTokenType::GreaterEqual),
@@ -165,7 +190,7 @@ impl<'a> Parser<'a> {
         self.find_binary_expression(Parser::term, &token_types)
     }
 
-    fn term(&mut self) -> Result<Expression, ParseError> {
+    fn term(&mut self) -> ParseExprResult {
         let token_types = vec![
             TokenType::SingleChar(SingleCharTokenType::Minus),
             TokenType::SingleChar(SingleCharTokenType::Plus),
@@ -173,7 +198,7 @@ impl<'a> Parser<'a> {
         self.find_binary_expression(Parser::factor, &token_types)
     }
 
-    fn factor(&mut self) -> Result<Expression, ParseError> {
+    fn factor(&mut self) -> ParseExprResult {
         let token_types = vec![
             TokenType::SingleChar(SingleCharTokenType::Slash),
             TokenType::SingleChar(SingleCharTokenType::Star),
@@ -181,7 +206,7 @@ impl<'a> Parser<'a> {
         self.find_binary_expression(Parser::unary, &token_types)
     }
 
-    fn unary(&mut self) -> Result<Expression, ParseError> {
+    fn unary(&mut self) -> ParseExprResult {
         let token_types = vec![
             TokenType::SingleChar(SingleCharTokenType::Minus),
             TokenType::ExpressionOperator(ExpressionOperatorTokenType::Not),
@@ -199,7 +224,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn primary(&mut self) -> Result<Expression, ParseError> {
+    fn primary(&mut self) -> ParseExprResult {
         let next_token = self.tokens_iter.peek().unwrap().clone();
         match &next_token.token_type {
             TokenType::Literal(literal) => {
@@ -214,14 +239,11 @@ impl<'a> Parser<'a> {
                 self.advance();
                 self.find_group()
             }
-            _ => Err(ParseError {
-                token: (*next_token).clone(),
-                message: "Expected expression",
-            }),
+            _ => Err(ParseError { token: next_token.clone(), message: "Expected expression" }),
         }
     }
 
-    fn find_group(&mut self) -> Result<Expression, ParseError> {
+    fn find_group(&mut self) -> ParseExprResult {
         let expression = self.expression()?;
         let close_paren_token = TokenType::CloseDelimiter(Delimiter::Paren);
         match self.tokens_iter.peek() {
@@ -236,13 +258,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn find_binary_expression<F: Fn(&mut Parser<'a>) -> Result<Expression, ParseError>>(
+    fn find_binary_expression<F>(
         &mut self,
         expression_factory: F,
         token_types: &[TokenType],
-    ) -> Result<Expression, ParseError> {
+    ) -> ParseExprResult where F: Fn(&mut Parser<'a>) -> ParseExprResult  {
         let mut expression = expression_factory(self)?;
-
         while self.next_matches_any(token_types) {
             self.advance();
             let operator = self.current.unwrap();
@@ -257,9 +278,9 @@ impl<'a> Parser<'a> {
         Ok(expression)
     }
 
-    fn next_matches_one(&mut self, token_type: &TokenType) -> bool {
+    fn next_matches_one(&mut self, token_type: TokenType) -> bool {
         if let Some(next) = self.tokens_iter.peek() {
-            &next.token_type == token_type
+            next.token_type == token_type
         } else {
             false
         }
@@ -274,9 +295,26 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self) -> Option<&'a Token> {
-        self.previous = self.current.take();
         self.current = self.tokens_iter.next();
         self.current
+    }
+
+    fn advance_when_match<F, R, E>(
+        &mut self,
+        token_type: TokenType,
+        next_step: F,
+        else_fn: E
+    ) -> R where F: Fn(&mut Self) -> R, E: Fn(&Self) -> R {
+        if self.next_matches_one(token_type) {
+            self.advance();
+            next_step(self)
+        } else {
+            else_fn(self)
+        }
+    }
+
+    fn make_error(&self, message: &'static str) -> ParseError {
+        ParseError { token: self.current.unwrap().clone(), message }
     }
 
     fn synchronize(&mut self) {
@@ -302,15 +340,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn check_semicolon_after_stmt(&mut self, stmt: Statement) -> Result<Statement, ParseError> {
-        if self.next_matches_one(&TokenType::SingleChar(SingleCharTokenType::Semicolon)) {
+    fn check_semicolon_after_stmt(&mut self, stmt: Statement) -> ParseStmtResult {
+        if self.next_matches_one(TokenType::SingleChar(SingleCharTokenType::Semicolon)) {
             self.advance();
             Ok(stmt)
         } else {
-            Err(ParseError {
-                token: self.current.unwrap().clone(),
-                message: "Expect ';' after return value.",
-            })
+            Err(self.make_error("Expect ';' after return value."))
         }
     }
 }
@@ -343,7 +378,6 @@ impl KeywordTokenType {
     }
 }
 
-// TODO: store token reference
 struct ParseError {
     token: Token,
     message: &'static str,

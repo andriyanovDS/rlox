@@ -94,6 +94,23 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         self.environment = previous_env;
         Ok(())
     }
+
+    fn visit_if_statement(
+        &mut self,
+        condition: &Expression,
+        then_branch: &Statement,
+        else_branch: &Option<Box<Statement>>
+    ) -> StmtInterpretResult {
+        let object = condition.accept(self)?;
+        if object.is_truthy() {
+            then_branch.accept(self)
+        } else {
+            else_branch
+                .as_ref()
+                .map(|stmt| stmt.as_ref().accept(self))
+                .unwrap_or(Ok(()))
+        }
+    }
 }
 
 impl expression::Visitor<ExprInterpretResult> for Interpreter {
@@ -143,6 +160,7 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
 
     fn visit_variable(&self, literal: &str, token: &Token) -> ExprInterpretResult {
         self.environment
+            .as_ref()
             .borrow()
             .get(literal)
             .map(|object| object.clone())
