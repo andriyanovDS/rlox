@@ -14,6 +14,7 @@ mod scanner;
 mod statement;
 mod token;
 mod token_type;
+mod function;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");

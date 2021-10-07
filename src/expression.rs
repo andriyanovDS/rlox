@@ -9,6 +9,7 @@ pub trait Visitor<Result> {
     fn visit_variable(&self, literal: &str, token: &Token) -> Result;
     fn visit_assignment(&self, token: &Token, right: &Expression) -> Result;
     fn visit_logical(&self, left: &Expression, operator: &Token, right: &Expression) -> Result;
+    fn visit_call(&self, callee: &Expression, close_paren: &Token, arguments: &[Expression]) -> Result;
 }
 
 #[derive(Debug, PartialEq)]
@@ -20,6 +21,7 @@ pub enum Expression {
     Variable { name: String, token: Token },
     Assignment(Token, Box<Expression>),
     Logical(Box<Expression>, Token, Box<Expression>),
+    Call { callee: Box<Expression>, close_paren: Token, arguments: Vec<Expression> }
 }
 
 #[derive(Debug, PartialEq)]
@@ -43,6 +45,9 @@ impl Expression {
             Expression::Variable { name, token } => visitor.visit_variable(name, token),
             Expression::Assignment(token, expr) => visitor.visit_assignment(token, expr),
             Expression::Logical(left, token, right) => visitor.visit_logical(left, token, right),
+            Expression::Call { callee, close_paren, arguments } => {
+                visitor.visit_call(callee, close_paren, arguments)
+            }
         }
     }
 }

@@ -37,6 +37,10 @@ impl Visitor<String> for AstPrinter {
     fn visit_logical(&self, left: &Expression, operator: &Token, right: &Expression) -> String {
         self.parenthesize(operator.lexeme.iter().collect(), vec![left, right])
     }
+
+    fn visit_call(&self, callee: &Expression, close_paren: &Token, arguments: &[Expression]) -> String {
+        todo!()
+    }
 }
 
 impl AstPrinter {

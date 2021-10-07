@@ -210,6 +210,18 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
             _ => right.accept(self),
         }
     }
+
+    fn visit_call(&self, callee: &Expression, close_paren: &Token, arguments: &[Expression]) -> ExprInterpretResult {
+        if let Object::Callable(callable) = &callee.accept(self)? {
+            let mut obj_arguments = Vec::with_capacity(arguments.len());
+            for expression in arguments {
+                obj_arguments.push(expression.accept(self)?)
+            }
+            Ok(callable.call(self, &obj_arguments))
+        } else {
+            Err(InterpretError { line: close_paren.line, message: "Unexpected object".to_string() })
+        }
+    }
 }
 
 impl Interpreter {

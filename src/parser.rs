@@ -313,8 +313,37 @@ impl<'a> Parser<'a> {
                 Box::new(right_expression),
             ))
         } else {
-            self.primary()
+            self.find_call()
         }
+    }
+
+    fn find_call(&mut self) -> ParseExprResult {
+        let mut expression = self.primary()?;
+        loop {
+            if self.next_matches_one(TokenType::OpenDelimiter(Delimiter::Paren)) {
+                self.advance();
+                expression = self.finish_call(expression)?;
+            } else {
+                return Ok(expression)
+            }
+        }
+    }
+
+    fn finish_call(&mut self, callee: Expression) -> ParseExprResult {
+        let mut arguments: Vec<Expression> = Vec::new();
+        let callee = Box::new(callee);
+        if self.next_matches_one(TokenType::CloseDelimiter(Delimiter::Paren)) {
+            self.advance();
+            return Ok(Expression::Call { callee, close_paren: self.current.unwrap().clone(), arguments });
+        }
+        while self.next_matches_one(TokenType::SingleChar(SingleCharTokenType::Comma)) {
+            self.advance();
+            if arguments.len() >= 255 {
+                return Err(self.make_error("Can't have more than 255 arguments."));
+            }
+            arguments.push(self.expression()?)
+        }
+        Ok(Expression::Call { callee, close_paren: self.current.unwrap().clone(), arguments })
     }
 
     fn primary(&mut self) -> ParseExprResult {
