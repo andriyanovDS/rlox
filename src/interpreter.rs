@@ -3,14 +3,17 @@ use crate::expression::{self, Expression, LiteralExpression};
 use crate::object::Object;
 use crate::statement::{self, Statement};
 use crate::token::Token;
+use crate::clock;
 use crate::token_type::{
     ExpressionOperatorTokenType, KeywordTokenType, SingleCharTokenType, TokenType,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::result;
+use crate::function::Callable;
 
 pub struct Interpreter {
+    globals: Environment,
     environment: Rc<RefCell<Environment>>,
 }
 
@@ -37,6 +40,7 @@ impl InterpretError {
 impl Interpreter {
     pub fn new() -> Self {
         Self {
+            globals: Interpreter::make_globals(),
             environment: Rc::new(RefCell::new(Environment::new())),
         }
     }
@@ -47,6 +51,12 @@ impl Interpreter {
                 eprintln!("{}", error.to_error_message());
             }
         }
+    }
+
+    fn make_globals() -> Environment {
+        let mut env = Environment::new();
+        env.define("clock".to_string(), Object::make_clock_fn());
+        env
     }
 }
 
@@ -213,13 +223,23 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
 
     fn visit_call(&self, callee: &Expression, close_paren: &Token, arguments: &[Expression]) -> ExprInterpretResult {
         if let Object::Callable(callable) = &callee.accept(self)? {
-            let mut obj_arguments = Vec::with_capacity(arguments.len());
+            let arg_len = arguments.len();
+            if callable.arity != arg_len {
+                return Err(InterpretError {
+                    line: close_paren.line,
+                    message: format!("Expected {} arguments but got {}", callable.arity, arg_len)
+                });
+            }
+            let mut obj_arguments = Vec::with_capacity(arg_len);
             for expression in arguments {
                 obj_arguments.push(expression.accept(self)?)
             }
             Ok(callable.call(self, &obj_arguments))
         } else {
-            Err(InterpretError { line: close_paren.line, message: "Unexpected object".to_string() })
+            Err(InterpretError {
+                line: close_paren.line,
+                message: "Can only call functions and classes.".to_string()
+            })
         }
     }
 }

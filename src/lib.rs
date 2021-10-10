@@ -15,6 +15,7 @@ mod statement;
 mod token;
 mod token_type;
 mod function;
+mod clock;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");

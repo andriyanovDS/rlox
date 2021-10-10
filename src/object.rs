@@ -2,7 +2,7 @@ use crate::function::Callable;
 use std::fmt;
 use std::fmt::Formatter;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Object {
     Nil,
     Boolean(bool),
