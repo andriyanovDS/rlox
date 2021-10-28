@@ -125,6 +125,7 @@ impl<'a> Parser<'a> {
     fn parse_function_parameters(&mut self) -> Result<Vec<String>, ParseError> {
         let mut parameters = Vec::new();
         if self.next_matches_one(TokenType::CloseDelimiter(Delimiter::Paren)) {
+            self.advance();
             return Ok(parameters);
         }
         loop {
