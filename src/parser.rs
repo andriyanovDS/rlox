@@ -1,4 +1,5 @@
 use crate::expression::{Expression, LiteralExpression};
+use crate::lox_function::LoxFunction;
 use crate::statement::Statement;
 use crate::token::Token;
 use crate::token_type::{
@@ -6,6 +7,7 @@ use crate::token_type::{
     SingleCharTokenType, TokenType,
 };
 use std::iter::Peekable;
+use std::rc::Rc;
 use std::slice::Iter;
 
 pub struct Parser<'a> {
@@ -42,12 +44,16 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) -> Result<Statement, ParseError> {
-        let var_token_type = TokenType::Keyword(KeywordTokenType::Var);
-        if self.tokens_iter.peek().unwrap().token_type == var_token_type {
-            self.advance();
-            self.variable_statement()
-        } else {
-            self.statement()
+        match self.tokens_iter.peek().unwrap().token_type {
+            TokenType::Keyword(KeywordTokenType::Fun) => {
+                self.advance();
+                self.function_statement()
+            }
+            TokenType::Keyword(KeywordTokenType::Var) => {
+                self.advance();
+                self.variable_statement()
+            }
+            _ => self.statement(),
         }
     }
 
@@ -71,19 +77,19 @@ impl<'a> Parser<'a> {
             }
             TokenType::OpenDelimiter(Delimiter::Brace) => {
                 self.advance();
-                self.block()
+                self.block().map(Statement::Block)
             }
             _ => self.expression_statement(),
         }
     }
 
-    fn block(&mut self) -> ParseStmtResult {
+    fn block(&mut self) -> Result<Vec<Statement>, ParseError> {
         let mut statements: Vec<Statement> = Vec::new();
         loop {
             match self.tokens_iter.peek().map(|token| &token.token_type) {
                 Some(TokenType::CloseDelimiter(Delimiter::Brace)) => {
                     self.advance();
-                    return Ok(Statement::Block(statements));
+                    return Ok(statements);
                 }
                 Some(TokenType::EOF) => {
                     self.advance();
@@ -93,6 +99,42 @@ impl<'a> Parser<'a> {
                     let statement = self.declaration()?;
                     statements.push(statement);
                 }
+            }
+        }
+    }
+
+    fn function_statement(&mut self) -> ParseStmtResult {
+        let name = self.consume_identifier(|| "Expect function name.")?;
+        self.advance();
+        let parameters = self.parse_function_parameters()?;
+        self.advance_when_match(
+            TokenType::OpenDelimiter(Delimiter::Brace),
+            |parser| {
+                let body = parser.block()?;
+                let lox_func = LoxFunction::new(name, parameters, body);
+                Ok(Statement::Function(Rc::new(lox_func)))
+            },
+            |parser| Err(parser.make_error("Expect '{' before function body.")),
+        )
+    }
+
+    fn parse_function_parameters(&mut self) -> Result<Vec<String>, ParseError> {
+        let mut parameters = Vec::new();
+        if self.next_matches_one(TokenType::CloseDelimiter(Delimiter::Paren)) {
+            return Ok(parameters);
+        }
+        loop {
+            let parameter = self.consume_identifier(|| "Expect parameter name.")?;
+            parameters.push(parameter);
+            match &self.tokens_iter.peek().unwrap().token_type {
+                TokenType::SingleChar(SingleCharTokenType::Comma) => {
+                    self.advance();
+                }
+                TokenType::CloseDelimiter(Delimiter::Paren) => {
+                    self.advance();
+                    return Ok(parameters);
+                }
+                _ => return Err(self.make_error("Expect ')' after parameters.")),
             }
         }
     }
@@ -129,27 +171,30 @@ impl<'a> Parser<'a> {
         self.advance_when_match(
             TokenType::OpenDelimiter(Delimiter::Paren),
             |_| Ok(()),
-            |parser| Err(parser.make_error("Expect '(' after 'for'."))
+            |parser| Err(parser.make_error("Expect '(' after 'for'.")),
         )?;
         let initializer = self.parse_for_initializer()?;
         let condition = self.parse_for_expression(
             TokenType::SingleChar(SingleCharTokenType::Semicolon),
-            || "Expect ';' after loop condition."
+            || "Expect ';' after loop condition.",
         )?;
-        let increment = self.parse_for_expression(
-            TokenType::CloseDelimiter(Delimiter::Paren),
-            || "Expect ')' after for clauses."
-        )?;
+        let increment = self
+            .parse_for_expression(TokenType::CloseDelimiter(Delimiter::Paren), || {
+                "Expect ')' after for clauses."
+            })?;
         let body = self.statement()?;
         let loop_body: Statement = match increment {
             Some(expr) => Statement::Block(vec![body, Statement::Expression(expr)]),
-            None => Statement::Block(vec![body])
+            None => Statement::Block(vec![body]),
         };
         let loop_condition = condition.unwrap_or(Expression::Literal(LiteralExpression::True));
-        let while_loop = Statement::While { condition: loop_condition, body: Box::new(loop_body) };
+        let while_loop = Statement::While {
+            condition: loop_condition,
+            body: Box::new(loop_body),
+        };
         match initializer {
             Some(stmt) => Ok(Statement::Block(vec![stmt, while_loop])),
-            None => Ok(while_loop)
+            None => Ok(while_loop),
         }
     }
 
@@ -159,20 +204,23 @@ impl<'a> Parser<'a> {
             TokenType::SingleChar(SingleCharTokenType::Semicolon) => {
                 self.advance();
                 Ok(None)
-            },
+            }
             TokenType::Keyword(KeywordTokenType::Var) => {
                 self.advance();
                 self.variable_statement().map(Some)
-            },
-            _ => self.expression_statement().map(Some)
+            }
+            _ => self.expression_statement().map(Some),
         }
     }
 
     fn parse_for_expression<EF>(
         &mut self,
         token_type: TokenType,
-        err_message_provider: EF
-    ) -> Result<Option<Expression>, ParseError> where EF: Fn() -> &'static str {
+        err_message_provider: EF,
+    ) -> Result<Option<Expression>, ParseError>
+    where
+        EF: Fn() -> &'static str,
+    {
         if self.tokens_iter.peek().unwrap().token_type == token_type {
             self.advance();
             Ok(None)
@@ -181,7 +229,7 @@ impl<'a> Parser<'a> {
             self.advance_when_match(
                 token_type,
                 move |_| Ok(Some(expression)),
-                |parser| Err(parser.make_error(err_message_provider()))
+                |parser| Err(parser.make_error(err_message_provider())),
             )
         }
     }
@@ -219,14 +267,17 @@ impl<'a> Parser<'a> {
         let condition: Expression = self.advance_when_match(
             TokenType::OpenDelimiter(Delimiter::Paren),
             Parser::expression,
-            |parser| Err(parser.make_error("Expect '(' after 'while'."))
+            |parser| Err(parser.make_error("Expect '(' after 'while'.")),
         )?;
         let body: Statement = self.advance_when_match(
             TokenType::CloseDelimiter(Delimiter::Paren),
             Parser::statement,
-            |parser| Err(parser.make_error("Expect ')' after condition."))
+            |parser| Err(parser.make_error("Expect ')' after condition.")),
         )?;
-        Ok(Statement::While { condition, body: Box::new(body) })
+        Ok(Statement::While {
+            condition,
+            body: Box::new(body),
+        })
     }
 
     fn expression_statement(&mut self) -> ParseStmtResult {
@@ -324,7 +375,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 expression = self.finish_call(expression)?;
             } else {
-                return Ok(expression)
+                return Ok(expression);
             }
         }
     }
@@ -334,16 +385,31 @@ impl<'a> Parser<'a> {
         let callee = Box::new(callee);
         if self.next_matches_one(TokenType::CloseDelimiter(Delimiter::Paren)) {
             self.advance();
-            return Ok(Expression::Call { callee, close_paren: self.current.unwrap().clone(), arguments });
+            return Ok(Expression::Call {
+                callee,
+                close_paren: self.current.unwrap().clone(),
+                arguments,
+            });
         }
+        arguments.push(self.expression()?);
         while self.next_matches_one(TokenType::SingleChar(SingleCharTokenType::Comma)) {
             self.advance();
             if arguments.len() >= 255 {
                 return Err(self.make_error("Can't have more than 255 arguments."));
             }
-            arguments.push(self.expression()?)
+            arguments.push(self.expression()?);
         }
-        Ok(Expression::Call { callee, close_paren: self.current.unwrap().clone(), arguments })
+        self.advance_when_match(
+            TokenType::CloseDelimiter(Delimiter::Paren),
+            |parser| {
+                Ok(Expression::Call {
+                    callee,
+                    close_paren: parser.current.unwrap().clone(),
+                    arguments,
+                })
+            },
+            |parser| Err(parser.make_error("Expect ')' after arguments.")),
+        )
     }
 
     fn primary(&mut self) -> ParseExprResult {
@@ -421,6 +487,19 @@ impl<'a> Parser<'a> {
             token_types.iter().any(|v| v == &next.token_type)
         } else {
             false
+        }
+    }
+
+    fn consume_identifier<F: FnOnce() -> &'static str>(
+        &mut self,
+        err_message: F,
+    ) -> Result<String, ParseError> {
+        match &self.tokens_iter.peek().unwrap().token_type {
+            TokenType::Literal(LiteralTokenType::Identifier(name)) => {
+                self.advance();
+                Ok(name.clone())
+            }
+            _ => Err(self.make_error(err_message())),
         }
     }
 

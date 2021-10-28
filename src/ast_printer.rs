@@ -4,15 +4,15 @@ use crate::token::Token;
 struct AstPrinter;
 
 impl Visitor<String> for AstPrinter {
-    fn visit_binary(&self, left: &Expression, operator: &Token, right: &Expression) -> String {
+    fn visit_binary(&mut self, left: &Expression, operator: &Token, right: &Expression) -> String {
         self.parenthesize(operator.lexeme.iter().collect(), vec![left, right])
     }
 
-    fn visit_grouping(&self, expression: &Expression) -> String {
+    fn visit_grouping(&mut self, expression: &Expression) -> String {
         self.parenthesize(String::from("group"), vec![expression])
     }
 
-    fn visit_literal(&self, literal: &LiteralExpression) -> String {
+    fn visit_literal(&mut self, literal: &LiteralExpression) -> String {
         match literal {
             LiteralExpression::True => String::from("true"),
             LiteralExpression::False => String::from("false"),
@@ -22,29 +22,34 @@ impl Visitor<String> for AstPrinter {
         }
     }
 
-    fn visit_unary(&self, operator: &Token, right: &Expression) -> String {
+    fn visit_unary(&mut self, operator: &Token, right: &Expression) -> String {
         self.parenthesize(operator.lexeme.iter().collect(), vec![right])
     }
 
-    fn visit_variable(&self, literal: &str, _token: &Token) -> String {
+    fn visit_variable(&mut self, literal: &str, _token: &Token) -> String {
         literal.to_string()
     }
 
-    fn visit_assignment(&self, token: &Token, right: &Expression) -> String {
+    fn visit_assignment(&mut self, token: &Token, right: &Expression) -> String {
         self.parenthesize(token.lexeme.iter().collect(), vec![right])
     }
 
-    fn visit_logical(&self, left: &Expression, operator: &Token, right: &Expression) -> String {
+    fn visit_logical(&mut self, left: &Expression, operator: &Token, right: &Expression) -> String {
         self.parenthesize(operator.lexeme.iter().collect(), vec![left, right])
     }
 
-    fn visit_call(&self, callee: &Expression, close_paren: &Token, arguments: &[Expression]) -> String {
+    fn visit_call(
+        &mut self,
+        _callee: &Expression,
+        _close_paren: &Token,
+        _arguments: &[Expression],
+    ) -> String {
         todo!()
     }
 }
 
 impl AstPrinter {
-    fn parenthesize(&self, name: String, expressions: Vec<&Expression>) -> String {
+    fn parenthesize(&mut self, name: String, expressions: Vec<&Expression>) -> String {
         let tokens: Vec<String> = expressions.iter().map(|v| v.accept(self)).collect();
 
         format!("({} {})", name, tokens.join(" "))
@@ -78,8 +83,8 @@ mod tests {
             ),
             Box::new(right_expression),
         );
-        let ast_printer = AstPrinter {};
-        let result = expression.accept(&ast_printer);
+        let mut ast_printer = AstPrinter {};
+        let result = expression.accept(&mut ast_printer);
 
         assert_eq!(result, String::from("(* (- 12) (group 45.67))"));
     }

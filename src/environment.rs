@@ -1,7 +1,7 @@
 use crate::object::Object;
-use std::cell::RefCell;
-use std::collections::{HashMap, hash_map};
 use hash_map::Entry;
+use std::cell::RefCell;
+use std::collections::{hash_map, HashMap};
 use std::rc::Rc;
 
 pub struct Environment {

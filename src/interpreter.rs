@@ -1,23 +1,23 @@
+use crate::callable::Callable;
 use crate::environment::Environment;
 use crate::expression::{self, Expression, LiteralExpression};
+use crate::lox_function::LoxFunction;
 use crate::object::Object;
 use crate::statement::{self, Statement};
 use crate::token::Token;
-use crate::clock;
 use crate::token_type::{
     ExpressionOperatorTokenType, KeywordTokenType, SingleCharTokenType, TokenType,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::result;
-use crate::function::Callable;
 
 pub struct Interpreter {
-    globals: Environment,
-    environment: Rc<RefCell<Environment>>,
+    pub globals: Rc<RefCell<Environment>>,
+    pub environment: Rc<RefCell<Environment>>,
 }
 
-struct InterpretError {
+pub struct InterpretError {
     line: u32,
     message: String,
 }
@@ -39,8 +39,9 @@ impl InterpretError {
 
 impl Interpreter {
     pub fn new() -> Self {
+        let globals = Interpreter::make_globals();
         Self {
-            globals: Interpreter::make_globals(),
+            globals: Rc::new(RefCell::new(globals)),
             environment: Rc::new(RefCell::new(Environment::new())),
         }
     }
@@ -57,6 +58,23 @@ impl Interpreter {
         let mut env = Environment::new();
         env.define("clock".to_string(), Object::make_clock_fn());
         env
+    }
+
+    pub fn execute_block(
+        &mut self,
+        statements: &[Statement],
+        environment: Rc<RefCell<Environment>>,
+    ) -> StmtInterpretResult {
+        let previous_env = self.environment.clone();
+        self.environment = environment;
+        for statement in statements {
+            if let Err(error) = statement.accept(self) {
+                self.environment = previous_env;
+                return Err(error);
+            }
+        }
+        self.environment = previous_env;
+        Ok(())
     }
 }
 
@@ -75,11 +93,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         expression.accept(self).map(|_| ())
     }
 
-    fn visit_variable(
-        &mut self,
-        name: &str,
-        value: &Option<Expression>,
-    ) -> StmtInterpretResult {
+    fn visit_variable(&mut self, name: &str, value: &Option<Expression>) -> StmtInterpretResult {
         let object = value
             .as_ref()
             .map(|expr| expr.accept(self))
@@ -91,17 +105,8 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
     }
 
     fn visit_block(&mut self, statements: &[Statement]) -> StmtInterpretResult {
-        let previous_env = self.environment.clone();
         let environment = Environment::from(self.environment.clone());
-        self.environment = Rc::new(RefCell::new(environment));
-        for statement in statements {
-            if let Err(error) = statement.accept(self) {
-                self.environment = previous_env;
-                return Err(error);
-            }
-        }
-        self.environment = previous_env;
-        Ok(())
+        self.execute_block(statements, Rc::new(RefCell::new(environment)))
     }
 
     fn visit_if(
@@ -127,15 +132,22 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
             if condition.is_truthy() {
                 body.accept(self)?;
             } else {
-                return Ok(())
+                return Ok(());
             }
         }
+    }
+
+    fn visit_function(&mut self, func: Rc<LoxFunction>) -> StmtInterpretResult {
+        let name = func.name.clone();
+        let callable = Object::Callable(Callable::LoxFn(func));
+        self.environment.borrow_mut().define(name, callable);
+        Ok(())
     }
 }
 
 impl expression::Visitor<ExprInterpretResult> for Interpreter {
     fn visit_binary(
-        &self,
+        &mut self,
         left: &Expression,
         operator: &Token,
         right: &Expression,
@@ -155,11 +167,11 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
         }
     }
 
-    fn visit_grouping(&self, expression: &Expression) -> ExprInterpretResult {
+    fn visit_grouping(&mut self, expression: &Expression) -> ExprInterpretResult {
         expression.accept(self)
     }
 
-    fn visit_literal(&self, literal: &LiteralExpression) -> ExprInterpretResult {
+    fn visit_literal(&mut self, literal: &LiteralExpression) -> ExprInterpretResult {
         let object = match literal {
             LiteralExpression::Nil => Object::Nil,
             LiteralExpression::False => Object::Boolean(false),
@@ -170,7 +182,7 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
         Ok(object)
     }
 
-    fn visit_unary(&self, operator: &Token, right: &Expression) -> ExprInterpretResult {
+    fn visit_unary(&mut self, operator: &Token, right: &Expression) -> ExprInterpretResult {
         let right = right.accept(self)?;
         match (&operator.token_type, right) {
             (&TokenType::SingleChar(SingleCharTokenType::Minus), Object::Number(number)) => {
@@ -183,7 +195,7 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
         }
     }
 
-    fn visit_variable(&self, literal: &str, token: &Token) -> ExprInterpretResult {
+    fn visit_variable(&mut self, literal: &str, token: &Token) -> ExprInterpretResult {
         self.environment
             .as_ref()
             .borrow()
@@ -194,7 +206,7 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
             })
     }
 
-    fn visit_assignment(&self, token: &Token, right: &Expression) -> ExprInterpretResult {
+    fn visit_assignment(&mut self, token: &Token, right: &Expression) -> ExprInterpretResult {
         let object = right.accept(self)?;
         let name: String = token.lexeme.iter().collect();
         self.environment
@@ -208,7 +220,7 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
     }
 
     fn visit_logical(
-        &self,
+        &mut self,
         left: &Expression,
         operator: &Token,
         right: &Expression,
@@ -221,24 +233,30 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
         }
     }
 
-    fn visit_call(&self, callee: &Expression, close_paren: &Token, arguments: &[Expression]) -> ExprInterpretResult {
+    fn visit_call(
+        &mut self,
+        callee: &Expression,
+        close_paren: &Token,
+        arguments: &[Expression],
+    ) -> ExprInterpretResult {
         if let Object::Callable(callable) = &callee.accept(self)? {
             let arg_len = arguments.len();
-            if callable.arity != arg_len {
+            let arity = callable.arity();
+            if arity != arg_len {
                 return Err(InterpretError {
                     line: close_paren.line,
-                    message: format!("Expected {} arguments but got {}", callable.arity, arg_len)
+                    message: format!("Expected {} arguments but got {}", arity, arg_len),
                 });
             }
             let mut obj_arguments = Vec::with_capacity(arg_len);
             for expression in arguments {
                 obj_arguments.push(expression.accept(self)?)
             }
-            Ok(callable.call(self, &obj_arguments))
+            Ok(callable.call(self, &obj_arguments)?)
         } else {
             Err(InterpretError {
                 line: close_paren.line,
-                message: "Can only call functions and classes.".to_string()
+                message: "Can only call functions and classes.".to_string(),
             })
         }
     }
@@ -329,6 +347,15 @@ impl Object {
             (Object::String(left), Object::String(right)) => left.eq(right),
             (Object::Boolean(left), Object::Boolean(right)) => left == right,
             _ => false,
+        }
+    }
+}
+
+impl Callable {
+    fn arity(&self) -> usize {
+        match self {
+            Callable::NativeFn(func) => func.arity,
+            Callable::LoxFn(func) => func.arity(),
         }
     }
 }

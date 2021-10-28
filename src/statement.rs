@@ -1,4 +1,6 @@
 use crate::expression::Expression;
+use crate::lox_function::LoxFunction;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum Statement {
@@ -16,8 +18,9 @@ pub enum Statement {
     },
     While {
         condition: Expression,
-        body: Box<Statement>
-    }
+        body: Box<Statement>,
+    },
+    Function(Rc<LoxFunction>),
 }
 
 pub trait Visitor<T> {
@@ -32,6 +35,7 @@ pub trait Visitor<T> {
         else_branch: &Option<Box<Statement>>,
     ) -> T;
     fn visit_while(&mut self, condition: &Expression, body: &Statement) -> T;
+    fn visit_function(&mut self, func: Rc<LoxFunction>) -> T;
 }
 
 impl Statement {
@@ -46,7 +50,8 @@ impl Statement {
                 then_branch,
                 else_branch,
             } => visitor.visit_if(condition, then_branch, else_branch),
-            Statement::While { condition, body } => visitor.visit_while(condition, body)
+            Statement::While { condition, body } => visitor.visit_while(condition, body),
+            Statement::Function(func) => visitor.visit_function(func.clone()),
         }
     }
 }

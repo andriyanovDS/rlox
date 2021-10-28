@@ -1,6 +1,6 @@
-use crate::function::Callable;
+use crate::callable::Callable;
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{Debug, Formatter};
 
 #[derive(Debug, Clone)]
 pub enum Object {
@@ -19,7 +19,7 @@ impl fmt::Display for Object {
             Object::Boolean(value) => write!(f, "{}", value),
             Object::String(value) => write!(f, "{}", value),
             Object::Number(value) => write!(f, "{}", value),
-            Object::Callable(_) => write!(f, "{}", "function"),
+            Object::Callable(callable) => callable.fmt(f),
             Object::NotInitialized => write!(f, "variable was not initialized"),
         }
     }

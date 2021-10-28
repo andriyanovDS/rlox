@@ -5,17 +5,19 @@ use scanner::Scanner;
 use std::{fs, io, result::Result};
 
 mod ast_printer;
+mod callable;
+mod clock;
 mod environment;
 mod expression;
 mod interpreter;
+mod lox_function;
+mod native_function;
 mod object;
 mod parser;
 mod scanner;
 mod statement;
 mod token;
 mod token_type;
-mod function;
-mod clock;
 
 pub fn run_prompt() -> Result<(), Error> {
     print!("> ");
