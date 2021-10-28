@@ -271,13 +271,15 @@ impl<'a> Parser<'a> {
     fn return_statement(&mut self) -> ParseStmtResult {
         if self.next_matches_one(TokenType::SingleChar(SingleCharTokenType::Semicolon)) {
             self.advance();
-            return Ok(Statement::Return(Expression::Literal(LiteralExpression::Nil)));
+            return Ok(Statement::Return(Expression::Literal(
+                LiteralExpression::Nil,
+            )));
         }
         let expression = self.expression()?;
         self.advance_when_match(
             TokenType::SingleChar(SingleCharTokenType::Semicolon),
             |_| Ok(Statement::Return(expression)),
-            |parser| Err(parser.make_error("Expect ';' after return value."))
+            |parser| Err(parser.make_error("Expect ';' after return value.")),
         )
     }
 

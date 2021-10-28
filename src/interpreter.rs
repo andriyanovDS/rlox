@@ -72,11 +72,11 @@ impl Interpreter {
                 Err(error) => {
                     self.environment = previous_env;
                     return Err(error);
-                },
+                }
                 Ok(Some(stmt)) => {
                     self.environment = previous_env;
                     return Ok(Some(stmt));
-                },
+                }
                 _ => {}
             }
         }
@@ -146,7 +146,10 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
 
     fn visit_function(&mut self, func: Rc<LoxFunction>) -> StmtInterpretResult {
         let name = func.name.clone();
-        let callable = Object::Callable(Callable::LoxFn(func));
+        let callable = Object::Callable(Callable::LoxFn {
+            declaration: func,
+            closure: self.environment.clone(),
+        });
         self.environment.borrow_mut().define(name, callable);
         Ok(None)
     }
@@ -366,7 +369,10 @@ impl Callable {
     fn arity(&self) -> usize {
         match self {
             Callable::NativeFn(func) => func.arity,
-            Callable::LoxFn(func) => func.arity(),
+            Callable::LoxFn {
+                declaration,
+                closure: _,
+            } => declaration.arity(),
         }
     }
 }
