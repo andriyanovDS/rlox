@@ -22,7 +22,7 @@ pub struct InterpretError {
     message: String,
 }
 
-type StmtInterpretResult = Result<(), InterpretError>;
+type StmtInterpretResult = Result<Option<Object>, InterpretError>;
 type ExprInterpretResult = Result<Object, InterpretError>;
 
 impl InterpretError {
@@ -68,13 +68,20 @@ impl Interpreter {
         let previous_env = self.environment.clone();
         self.environment = environment;
         for statement in statements {
-            if let Err(error) = statement.accept(self) {
-                self.environment = previous_env;
-                return Err(error);
+            match statement.accept(self) {
+                Err(error) => {
+                    self.environment = previous_env;
+                    return Err(error);
+                },
+                Ok(Some(stmt)) => {
+                    self.environment = previous_env;
+                    return Ok(Some(stmt));
+                },
+                _ => {}
             }
         }
         self.environment = previous_env;
-        Ok(())
+        Ok(None)
     }
 }
 
@@ -83,14 +90,14 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         match expression.accept(self) {
             Ok(object) => {
                 println!("{}", object);
-                Ok(())
+                Ok(None)
             }
             Err(err) => Err(err),
         }
     }
 
     fn visit_expression(&mut self, expression: &Expression) -> StmtInterpretResult {
-        expression.accept(self).map(|_| ())
+        expression.accept(self).map(|_| None)
     }
 
     fn visit_variable(&mut self, name: &str, value: &Option<Expression>) -> StmtInterpretResult {
@@ -101,7 +108,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         self.environment
             .borrow_mut()
             .define(name.to_string(), object);
-        Ok(())
+        Ok(None)
     }
 
     fn visit_block(&mut self, statements: &[Statement]) -> StmtInterpretResult {
@@ -122,7 +129,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
             else_branch
                 .as_ref()
                 .map(|stmt| stmt.as_ref().accept(self))
-                .unwrap_or(Ok(()))
+                .unwrap_or(Ok(None))
         }
     }
 
@@ -132,7 +139,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
             if condition.is_truthy() {
                 body.accept(self)?;
             } else {
-                return Ok(());
+                return Ok(None);
             }
         }
     }
@@ -141,7 +148,11 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         let name = func.name.clone();
         let callable = Object::Callable(Callable::LoxFn(func));
         self.environment.borrow_mut().define(name, callable);
-        Ok(())
+        Ok(None)
+    }
+
+    fn visit_return(&mut self, expression: &Expression) -> StmtInterpretResult {
+        expression.accept(self).map(Some)
     }
 }
 

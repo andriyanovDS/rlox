@@ -19,7 +19,7 @@ impl Callable {
     ) -> Result<Object, InterpretError> {
         match self {
             Callable::NativeFn(func) => Ok(func.call(arguments)),
-            Callable::LoxFn(func) => func.call(interpreter, arguments).map(|_| Object::Nil),
+            Callable::LoxFn(func) => func.call(interpreter, arguments),
         }
     }
 }

@@ -21,6 +21,7 @@ pub enum Statement {
         body: Box<Statement>,
     },
     Function(Rc<LoxFunction>),
+    Return(Expression),
 }
 
 pub trait Visitor<T> {
@@ -36,6 +37,7 @@ pub trait Visitor<T> {
     ) -> T;
     fn visit_while(&mut self, condition: &Expression, body: &Statement) -> T;
     fn visit_function(&mut self, func: Rc<LoxFunction>) -> T;
+    fn visit_return(&mut self, expression: &Expression) -> T;
 }
 
 impl Statement {
@@ -52,6 +54,7 @@ impl Statement {
             } => visitor.visit_if(condition, then_branch, else_branch),
             Statement::While { condition, body } => visitor.visit_while(condition, body),
             Statement::Function(func) => visitor.visit_function(func.clone()),
+            Statement::Return(expr) => visitor.visit_return(expr),
         }
     }
 }

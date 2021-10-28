@@ -25,12 +25,13 @@ impl LoxFunction {
         &self,
         interpreter: &mut Interpreter,
         arguments: &[Object],
-    ) -> Result<(), InterpretError> {
+    ) -> Result<Object, InterpretError> {
         let mut environment = Environment::from(interpreter.globals.clone());
         for (index, parameter) in self.parameters.iter().enumerate() {
             environment.define(parameter.clone(), arguments[index].clone())
         }
-        interpreter.execute_block(&self.body, Rc::new(RefCell::new(environment)))
+        let result = interpreter.execute_block(&self.body, Rc::new(RefCell::new(environment)))?;
+        Ok(result.unwrap_or(Object::Nil))
     }
 
     pub fn arity(&self) -> usize {

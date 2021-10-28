@@ -71,6 +71,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 self.print_statement()
             }
+            TokenType::Keyword(KeywordTokenType::Return) => {
+                self.advance();
+                self.return_statement()
+            }
             TokenType::Keyword(KeywordTokenType::While) => {
                 self.advance();
                 self.while_statement()
@@ -261,6 +265,19 @@ impl<'a> Parser<'a> {
         self.expression()
             .map(Statement::Print)
             .and_then(|stmt| self.check_semicolon_after_stmt(stmt))
+    }
+
+    fn return_statement(&mut self) -> ParseStmtResult {
+        if self.next_matches_one(TokenType::SingleChar(SingleCharTokenType::Semicolon)) {
+            self.advance();
+            return Ok(Statement::Return(Expression::Literal(LiteralExpression::Nil)));
+        }
+        let expression = self.expression()?;
+        self.advance_when_match(
+            TokenType::SingleChar(SingleCharTokenType::Semicolon),
+            |_| Ok(Statement::Return(expression)),
+            |parser| Err(parser.make_error("Expect ';' after return value."))
+        )
     }
 
     fn while_statement(&mut self) -> ParseStmtResult {
