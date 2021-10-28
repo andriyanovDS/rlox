@@ -26,7 +26,7 @@ impl LoxFunction {
         interpreter: &mut Interpreter,
         arguments: &[Object],
     ) -> Result<Object, InterpretError> {
-        let mut environment = Environment::from(interpreter.globals.clone());
+        let mut environment = Environment::from(interpreter.environment.clone());
         for (index, parameter) in self.parameters.iter().enumerate() {
             environment.define(parameter.clone(), arguments[index].clone())
         }
