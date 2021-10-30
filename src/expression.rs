@@ -36,7 +36,7 @@ pub enum Expression {
     },
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum LiteralExpression {
     False,
     True,

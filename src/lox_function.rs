@@ -8,8 +8,8 @@ use std::rc::Rc;
 
 pub struct LoxFunction {
     pub name: String,
-    parameters: Vec<String>,
-    body: Vec<Statement>,
+    pub parameters: Vec<String>,
+    pub body: Vec<Statement>,
 }
 
 impl LoxFunction {

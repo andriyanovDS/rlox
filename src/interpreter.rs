@@ -9,12 +9,14 @@ use crate::token_type::{
     ExpressionOperatorTokenType, KeywordTokenType, SingleCharTokenType, TokenType,
 };
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::result;
 
 pub struct Interpreter {
     pub globals: Rc<RefCell<Environment>>,
     pub environment: Rc<RefCell<Environment>>,
+    pub locals: HashMap<usize, usize>,
 }
 
 pub struct InterpretError {
@@ -40,9 +42,11 @@ impl InterpretError {
 impl Interpreter {
     pub fn new() -> Self {
         let globals = Interpreter::make_globals();
+        let globals = Rc::new(RefCell::new(globals));
         Self {
-            globals: Rc::new(RefCell::new(globals)),
-            environment: Rc::new(RefCell::new(Environment::new())),
+            globals: globals.clone(),
+            environment: globals.clone(),
+            locals: HashMap::new(),
         }
     }
 
@@ -106,6 +110,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
             .map(|expr| expr.accept(self))
             .unwrap_or(Ok(Object::NotInitialized))?;
         self.environment
+            .as_ref()
             .borrow_mut()
             .define(name.to_string(), object);
         Ok(None)
@@ -150,7 +155,10 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
             declaration: func,
             closure: self.environment.clone(),
         });
-        self.environment.borrow_mut().define(name, callable);
+        self.environment
+            .as_ref()
+            .borrow_mut()
+            .define(name, callable);
         Ok(None)
     }
 
@@ -210,27 +218,38 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
     }
 
     fn visit_variable(&mut self, literal: &str, token: &Token) -> ExprInterpretResult {
-        self.environment
-            .as_ref()
-            .borrow()
-            .get(literal)
-            .map_err(|message| InterpretError {
-                line: token.line,
-                message,
-            })
+        let result = match self.locals.get(&token.id) {
+            Some(distance) => self
+                .environment
+                .borrow()
+                .get_at_distance(*distance, literal),
+            None => self.globals.as_ref().borrow().get(literal),
+        };
+        result.map_err(|message| InterpretError {
+            line: token.line,
+            message,
+        })
     }
 
     fn visit_assignment(&mut self, token: &Token, right: &Expression) -> ExprInterpretResult {
         let object = right.accept(self)?;
         let name: String = token.lexeme.iter().collect();
-        self.environment
-            .borrow_mut()
-            .assign(name, object.clone())
-            .map(|()| object)
-            .map_err(|message| InterpretError {
-                line: token.line,
-                message,
-            })
+        let result = match self.locals.get(&token.id) {
+            Some(distance) => self.environment.as_ref().borrow_mut().assign_at_distance(
+                *distance,
+                name,
+                object.clone(),
+            ),
+            None => self
+                .globals
+                .as_ref()
+                .borrow_mut()
+                .assign(name, object.clone()),
+        };
+        result.map(|()| object).map_err(|message| InterpretError {
+            line: token.line,
+            message,
+        })
     }
 
     fn visit_logical(
@@ -277,6 +296,10 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
 }
 
 impl Interpreter {
+    pub fn resolve(&mut self, expression_id: usize, depth: usize) {
+        self.locals.insert(expression_id, depth);
+    }
+
     fn apply_single_char_binary_operation(
         &self,
         single_char_token_type: &SingleCharTokenType,

@@ -42,6 +42,15 @@ impl Environment {
             })
     }
 
+    pub fn get_at_distance(&self, distance: usize, name: &str) -> Result<Object, String> {
+        if distance == 0 {
+            return self.get(name);
+        }
+        let ancestor = self.ancestor(distance);
+        let env = ancestor.as_ref().borrow();
+        env.get(name)
+    }
+
     pub fn assign(&mut self, name: String, value: Object) -> Result<(), String> {
         if let Entry::Occupied(mut entry) = self.values.entry(name.clone()) {
             entry.insert(value);
@@ -52,6 +61,32 @@ impl Environment {
             Some(mut enclosing) => enclosing.assign(name, value),
             None => Err(format!("Undefined variable {}.", name)),
         }
+    }
+
+    pub fn assign_at_distance(
+        &mut self,
+        distance: usize,
+        name: String,
+        value: Object,
+    ) -> Result<(), String> {
+        if distance == 0 {
+            return self.assign(name, value);
+        }
+        let ancestor = self.ancestor(distance);
+        let mut env = ancestor.as_ref().borrow_mut();
+        env.assign(name, value)
+    }
+
+    fn ancestor(&self, distance: usize) -> Rc<RefCell<Environment>> {
+        let mut env = self.enclosing.as_ref().unwrap().clone();
+        let mut depth = 1;
+        while depth < distance {
+            depth += 1;
+            let env_ref = env.as_ref();
+            let enclosing = env_ref.borrow().enclosing.as_ref().unwrap().clone();
+            env = enclosing;
+        }
+        env
     }
 
     fn get_from_enclosing(&self, name: &str) -> Option<Result<Object, String>> {

@@ -9,6 +9,7 @@ use std::str::Chars;
 
 pub struct Scanner<'a> {
     source_iter: PeekMoreIterator<Chars<'a>>,
+    current_id: usize,
 }
 
 struct MatchedExpression {
@@ -17,12 +18,13 @@ struct MatchedExpression {
 }
 
 impl MatchedExpression {
-    fn make_token(self, line: u32) -> Token {
-        Token::new(
-            TokenType::ExpressionOperator(self.token_type),
-            self.lexeme,
+    fn make_token(self, line: u32, id: usize) -> Token {
+        Token {
+            token_type: TokenType::ExpressionOperator(self.token_type),
+            lexeme: self.lexeme,
             line,
-        )
+            id,
+        }
     }
 }
 
@@ -38,6 +40,7 @@ impl<'a> Scanner<'a> {
     pub fn new(source: &'a str) -> Scanner<'a> {
         Scanner {
             source_iter: source.chars().peekmore(),
+            current_id: 0,
         }
     }
 
@@ -64,7 +67,12 @@ impl<'a> Scanner<'a> {
                 CharacterScanResult::Skipped => {}
             }
         }
-        tokens.push(Token::new(TokenType::EOF, Vec::new(), line));
+        tokens.push(Token {
+            token_type: TokenType::EOF,
+            lexeme: Vec::new(),
+            line,
+            id: self.make_token_id(),
+        });
         tokens
     }
 
@@ -75,8 +83,9 @@ impl<'a> Scanner<'a> {
         keywords: &HashMap<String, KeywordTokenType>,
     ) -> CharacterScanResult {
         let make_result = |token| CharacterScanResult::Token(token);
+        let id = self.make_token_id();
         let make_token =
-            |token_type| make_result(Token::new_single_char(token_type, character, line));
+            |token_type| make_result(Token::new_single_char(token_type, character, line, id));
 
         match character {
             '(' => make_token(TokenType::OpenDelimiter(Delimiter::Paren)),
@@ -98,7 +107,7 @@ impl<'a> Scanner<'a> {
                     ExpressionOperatorTokenType::NotEqual,
                     ExpressionOperatorTokenType::Not,
                 )
-                .make_token(line),
+                .make_token(line, id),
             ),
             '=' => make_result(
                 self.matches_expression(
@@ -107,7 +116,7 @@ impl<'a> Scanner<'a> {
                     ExpressionOperatorTokenType::EqualEqual,
                     ExpressionOperatorTokenType::Equal,
                 )
-                .make_token(line),
+                .make_token(line, id),
             ),
             '>' => make_result(
                 self.matches_expression(
@@ -116,7 +125,7 @@ impl<'a> Scanner<'a> {
                     ExpressionOperatorTokenType::GreaterEqual,
                     ExpressionOperatorTokenType::Greater,
                 )
-                .make_token(line),
+                .make_token(line, id),
             ),
             '<' => make_result(
                 self.matches_expression(
@@ -125,7 +134,7 @@ impl<'a> Scanner<'a> {
                     ExpressionOperatorTokenType::LessEqual,
                     ExpressionOperatorTokenType::Less,
                 )
-                .make_token(line),
+                .make_token(line, id),
             ),
             '/' => {
                 if let Some(token_type) = self.scan_slash() {
@@ -140,7 +149,12 @@ impl<'a> Scanner<'a> {
                 |(literal, line_count)| {
                     let lexeme = literal.chars().clone().collect();
                     let token_type = TokenType::Literal(LiteralTokenType::String(literal));
-                    let token = Token::new(token_type, lexeme, line);
+                    let token = Token {
+                        token_type,
+                        lexeme,
+                        line,
+                        id,
+                    };
                     CharacterScanResult::StringLiteral(token, line_count)
                 },
             ),
@@ -148,16 +162,22 @@ impl<'a> Scanner<'a> {
             character if character.is_digit(10) => {
                 let (number, lexeme) = self.scan_number(character);
                 let token_type = TokenType::Literal(LiteralTokenType::Number(number));
-                let token = Token::new(token_type, lexeme.chars().collect(), line);
+                let token = Token::new(token_type, lexeme, line, id);
                 make_result(token)
             }
             character if character.is_alphanumeric() => {
                 let (token_type, lexeme) = self.scan_identifier(character, keywords);
-                let token = Token::new(token_type, lexeme.chars().collect(), line);
+                let token = Token::new(token_type, lexeme, line, id);
                 make_result(token)
             }
             _ => CharacterScanResult::Err(format!("Unknown symbol {}", character)),
         }
+    }
+
+    fn make_token_id(&mut self) -> usize {
+        let id = self.current_id;
+        self.current_id += 1;
+        return id;
     }
 
     fn matches_expression(
@@ -168,18 +188,18 @@ impl<'a> Scanner<'a> {
         right: ExpressionOperatorTokenType,
     ) -> MatchedExpression {
         if let Some(next) = self.source_iter.peek() {
-            if next == match_char {
+            return if next == match_char {
                 self.source_iter.next();
-                return MatchedExpression {
+                MatchedExpression {
                     token_type: left,
                     lexeme: vec![first_char, *match_char],
-                };
+                }
             } else {
-                return MatchedExpression {
+                MatchedExpression {
                     token_type: right,
                     lexeme: vec![first_char],
-                };
-            }
+                }
+            };
         }
         MatchedExpression {
             token_type: right,
