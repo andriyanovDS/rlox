@@ -1,5 +1,6 @@
 use crate::environment::Environment;
-use crate::interpreter::{InterpretError, Interpreter};
+use crate::error::InterpreterError;
+use crate::interpreter::Interpreter;
 use crate::object::Object;
 use crate::statement::Statement;
 use std::cell::RefCell;
@@ -26,7 +27,7 @@ impl LoxFunction {
         interpreter: &mut Interpreter,
         arguments: &[Object],
         closure: Rc<RefCell<Environment>>,
-    ) -> Result<Object, InterpretError> {
+    ) -> Result<Object, InterpreterError> {
         let mut environment = Environment::from(closure);
         for (index, parameter) in self.parameters.iter().enumerate() {
             environment.define(parameter.clone(), arguments[index].clone())

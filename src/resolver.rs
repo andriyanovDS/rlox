@@ -1,3 +1,4 @@
+use crate::error::InterpreterError;
 use crate::expression::{self, Expression, LiteralExpression};
 use crate::interpreter::Interpreter;
 use crate::lox_function::LoxFunction;
@@ -12,11 +13,7 @@ pub struct Resolver {
     scopes: VecDeque<HashMap<String, bool>>,
 }
 
-pub struct ResolveError {
-    pub message: String,
-}
-
-type ResolveResult = Result<(), ResolveError>;
+type ResolveResult = Result<(), InterpreterError>;
 
 impl statement::Visitor<ResolveResult> for Resolver {
     fn visit_print(&mut self, expression: &Expression) -> ResolveResult {
@@ -116,9 +113,10 @@ impl expression::Visitor<ResolveResult> for Resolver {
             self.resolve_local(literal, token.id);
             Ok(())
         } else {
-            Err(ResolveError {
-                message: "Can't read local variable in its own initializer.".to_string(),
-            })
+            Err(InterpreterError::new_from_static_str(
+                token,
+                "Can't read local variable in its own initializer.",
+            ))
         }
     }
 
@@ -187,15 +185,14 @@ impl Resolver {
 
     fn declare(&mut self, name: &str) -> ResolveResult {
         match self.scopes.front_mut() {
+            Some(inner_scope) if inner_scope.contains_key(name) => {
+                let message = "Already a variable with this name in this scope.".to_string();
+                // TODO: we need to find a way how to pass real line number here
+                Err(InterpreterError::new(0, message))
+            }
             Some(inner_scope) => {
-                if inner_scope.contains_key(name) {
-                    Err(ResolveError {
-                        message: "Already a variable with this name in this scope.".to_string(),
-                    })
-                } else {
-                    inner_scope.insert(name.to_string(), false);
-                    Ok(())
-                }
+                inner_scope.insert(name.to_string(), false);
+                Ok(())
             }
             None => Ok(()),
         }

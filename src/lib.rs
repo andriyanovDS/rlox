@@ -1,6 +1,7 @@
 use crate::interpreter::Interpreter;
 use crate::parser::Parser;
-use io::{BufRead, Error, Write};
+use error::Error;
+use io::{BufRead, Error as IOError, Write};
 use resolver::Resolver;
 use scanner::Scanner;
 use std::cell::RefCell;
@@ -11,6 +12,7 @@ mod ast_printer;
 mod callable;
 mod clock;
 mod environment;
+mod error;
 mod expression;
 mod interpreter;
 mod lox_function;
@@ -23,7 +25,7 @@ mod statement;
 mod token;
 mod token_type;
 
-pub fn run_prompt() -> Result<(), Error> {
+pub fn run_prompt() -> Result<(), IOError> {
     print!("> ");
     io::stdout().flush().unwrap();
 
@@ -49,10 +51,14 @@ fn run_interpreter(script: String) {
     let mut parser = Parser::new(&tokens);
     let statements = parser.parse();
 
+    if statements.is_empty() {
+        return;
+    }
+
     let interpreter = Rc::new(RefCell::new(Interpreter::new()));
     let mut resolver = Resolver::new(interpreter.clone());
     match resolver.resolve_statements(&statements) {
-        Err(error) => eprintln!("{}", error.message),
+        Err(error) => eprintln!("{}", error.description()),
         _ => {
             interpreter.as_ref().borrow_mut().interpret(&statements);
         }

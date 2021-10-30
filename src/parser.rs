@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::expression::{Expression, LiteralExpression};
 use crate::lox_function::LoxFunction;
 use crate::statement::Statement;
@@ -28,6 +29,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse(&mut self) -> Vec<Statement> {
         let mut statements: Vec<Statement> = Vec::new();
+        let mut had_error = false;
         loop {
             match self.declaration() {
                 Ok(expression) => {
@@ -36,14 +38,19 @@ impl<'a> Parser<'a> {
                 Err(error) if error.token.token_type == TokenType::EOF => break,
                 Err(error) => {
                     self.synchronize();
-                    eprint!("{}", error.error_message());
+                    had_error = true;
+                    eprintln!("{}", error.description());
                 }
             }
         }
-        statements
+        if had_error {
+            Vec::new()
+        } else {
+            statements
+        }
     }
 
-    fn declaration(&mut self) -> Result<Statement, ParseError> {
+    fn declaration(&mut self) -> ParseStmtResult {
         match self.tokens_iter.peek().unwrap().token_type {
             TokenType::Keyword(KeywordTokenType::Fun) => {
                 self.advance();
@@ -57,7 +64,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn statement(&mut self) -> Result<Statement, ParseError> {
+    fn statement(&mut self) -> ParseStmtResult {
         match self.tokens_iter.peek().unwrap().token_type {
             TokenType::Keyword(KeywordTokenType::For) => {
                 self.advance();
@@ -614,46 +621,51 @@ struct ParseError {
     message: &'static str,
 }
 
-impl ParseError {
-    fn error_message(&self) -> String {
-        let lexeme: String = self.token.lexeme.iter().collect();
-        format!("{} at '{}' {}", self.token.line, lexeme, self.message)
+impl Error for ParseError {
+    fn message(&self) -> &str {
+        self.message
+    }
+
+    fn line(&self) -> usize {
+        self.token.line as usize
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::object::Object;
 
     #[test]
     fn test_that_parser_generates_correct_output_for_binary_expression() {
         let plus_token = Token::new(
             TokenType::SingleChar(SingleCharTokenType::Plus),
-            vec!['+'],
+            String::from("+"),
             1,
+            1
         );
         let tokens = vec![
             Token::new(
                 TokenType::Literal(LiteralTokenType::Number(123f64)),
-                vec!['1', '2', '3'],
+                String::from("123"),
                 1,
+                2
             ),
             plus_token.clone(),
             Token::new(
                 TokenType::Literal(LiteralTokenType::Number(123f64)),
-                vec!['1', '2', '3'],
+                String::from("123"),
                 1,
+                3
             ),
-            Token::new(TokenType::EOF, vec![], 1),
+            Token::new(TokenType::EOF, String::new(), 1, 4),
         ];
         let mut parser = Parser::new(&tokens);
-        let expressions = parser.parse();
+        let statement = parser.parse();
         let expected_expression = Expression::Binary(
             Box::new(Expression::Literal(LiteralExpression::Number(123f64))),
             plus_token.clone(),
             Box::new(Expression::Literal(LiteralExpression::Number(123f64))),
         );
-        assert_eq!(expressions, vec![expected_expression])
+        assert_eq!(statement, vec![Statement::Expression(expected_expression)])
     }
 }

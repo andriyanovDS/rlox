@@ -1,5 +1,6 @@
 use crate::callable::Callable;
 use crate::environment::Environment;
+use crate::error::{Error, InterpreterError};
 use crate::expression::{self, Expression, LiteralExpression};
 use crate::lox_function::LoxFunction;
 use crate::object::Object;
@@ -19,25 +20,8 @@ pub struct Interpreter {
     pub locals: HashMap<usize, usize>,
 }
 
-pub struct InterpretError {
-    line: u32,
-    message: String,
-}
-
-type StmtInterpretResult = Result<Option<Object>, InterpretError>;
-type ExprInterpretResult = Result<Object, InterpretError>;
-
-impl InterpretError {
-    fn new(token: &Token, message: &'static str) -> Self {
-        Self {
-            line: token.line,
-            message: message.to_string(),
-        }
-    }
-    fn to_error_message(&self) -> String {
-        format!("[line: {}] {}", self.line, self.message)
-    }
-}
+type StmtInterpretResult = Result<Option<Object>, InterpreterError>;
+type ExprInterpretResult = Result<Object, InterpreterError>;
 
 impl Interpreter {
     pub fn new() -> Self {
@@ -53,7 +37,7 @@ impl Interpreter {
     pub fn interpret(&mut self, statements: &[Statement]) {
         for statement in statements {
             if let Err(error) = statement.accept(self) {
-                eprintln!("{}", error.to_error_message());
+                eprintln!("{}", error.description());
             }
         }
     }
@@ -179,13 +163,16 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
         match operator.token_type {
             TokenType::SingleChar(ref token_type) => {
                 let result = self.apply_single_char_binary_operation(token_type, &left, &right);
-                result.map_err(|message| InterpretError::new(operator, message))
+                result.map_err(|message| InterpreterError::new_from_static_str(operator, message))
             }
             TokenType::ExpressionOperator(ref token_type) => {
                 let result = self.apply_expression_binary_operation(token_type, &left, &right);
-                result.map_err(|message| InterpretError::new(operator, message))
+                result.map_err(|message| InterpreterError::new_from_static_str(operator, message))
             }
-            _ => Err(InterpretError::new(operator, "Unexpected token type")),
+            _ => Err(InterpreterError::new_from_static_str(
+                operator,
+                "Unexpected token type",
+            )),
         }
     }
 
@@ -213,7 +200,10 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
             (&TokenType::ExpressionOperator(ExpressionOperatorTokenType::Not), object) => {
                 Ok(Object::Boolean(!object.is_truthy()))
             }
-            _ => Err(InterpretError::new(operator, "Operand must be a number")),
+            _ => Err(InterpreterError::new_from_static_str(
+                operator,
+                "Operand must be a number",
+            )),
         }
     }
 
@@ -225,10 +215,7 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
                 .get_at_distance(*distance, literal),
             None => self.globals.as_ref().borrow().get(literal),
         };
-        result.map_err(|message| InterpretError {
-            line: token.line,
-            message,
-        })
+        result.map_err(|message| InterpreterError::new(token.line as usize, message))
     }
 
     fn visit_assignment(&mut self, token: &Token, right: &Expression) -> ExprInterpretResult {
@@ -246,10 +233,9 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
                 .borrow_mut()
                 .assign(name, object.clone()),
         };
-        result.map(|()| object).map_err(|message| InterpretError {
-            line: token.line,
-            message,
-        })
+        result
+            .map(|()| object)
+            .map_err(|message| InterpreterError::new_from_token(token, message))
     }
 
     fn visit_logical(
@@ -276,10 +262,8 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
             let arg_len = arguments.len();
             let arity = callable.arity();
             if arity != arg_len {
-                return Err(InterpretError {
-                    line: close_paren.line,
-                    message: format!("Expected {} arguments but got {}", arity, arg_len),
-                });
+                let message = format!("Expected {} arguments but got {}", arity, arg_len);
+                return Err(InterpreterError::new_from_token(close_paren, message));
             }
             let mut obj_arguments = Vec::with_capacity(arg_len);
             for expression in arguments {
@@ -287,10 +271,11 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
             }
             Ok(callable.call(self, &obj_arguments)?)
         } else {
-            Err(InterpretError {
-                line: close_paren.line,
-                message: "Can only call functions and classes.".to_string(),
-            })
+            let error = InterpreterError::new_from_static_str(
+                close_paren,
+                "Can only call functions and classes.",
+            );
+            Err(error)
         }
     }
 }

@@ -1,5 +1,6 @@
 use crate::environment::Environment;
-use crate::interpreter::{InterpretError, Interpreter};
+use crate::error::InterpreterError;
+use crate::interpreter::Interpreter;
 use crate::lox_function::LoxFunction;
 use crate::native_function::NativeFunction;
 use crate::object::Object;
@@ -21,7 +22,7 @@ impl Callable {
         &self,
         interpreter: &mut Interpreter,
         arguments: &[Object],
-    ) -> Result<Object, InterpretError> {
+    ) -> Result<Object, InterpreterError> {
         match self {
             Callable::NativeFn(func) => Ok(func.call(arguments)),
             Callable::LoxFn {
