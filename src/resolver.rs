@@ -11,6 +11,13 @@ use std::rc::Rc;
 pub struct Resolver {
     interpreter: Rc<RefCell<Interpreter>>,
     scopes: VecDeque<HashMap<String, bool>>,
+    current_function_type: FunctionType,
+}
+
+#[derive(Copy, Clone)]
+enum FunctionType {
+    None,
+    Function
 }
 
 type ResolveResult = Result<(), InterpreterError>;
@@ -66,13 +73,20 @@ impl statement::Visitor<ResolveResult> for Resolver {
         let func = func.as_ref();
         self.declare(&func.name)?;
         self.define(&func.name);
-        self.resolve_function(&func.parameters, &func.body)?;
+        self.resolve_function(&func.parameters, &func.body, FunctionType::Function)?;
         Ok(())
     }
 
     fn visit_return(&mut self, expression: &Expression) -> ResolveResult {
-        self.resolve_expression(expression)?;
-        Ok(())
+        match self.current_function_type {
+            FunctionType::None => {
+                Err(InterpreterError::new(0, "Can't return from top-level code.".to_string()))
+            },
+            FunctionType::Function => {
+                self.resolve_expression(expression)?;
+                Ok(())
+            }
+        }
     }
 }
 
@@ -157,6 +171,7 @@ impl Resolver {
         Self {
             interpreter,
             scopes: VecDeque::new(),
+            current_function_type: FunctionType::None
         }
     }
 
@@ -221,7 +236,10 @@ impl Resolver {
             })
     }
 
-    fn resolve_function(&mut self, params: &[String], body: &[Statement]) -> ResolveResult {
+    fn resolve_function(&mut self, params: &[String], body: &[Statement], fn_type: FunctionType) -> ResolveResult {
+        let enclosing_function = self.current_function_type;
+        self.current_function_type = fn_type;
+
         self.begin_scope();
         for parameter in params {
             self.declare(parameter)?;
@@ -229,6 +247,8 @@ impl Resolver {
         }
         self.resolve_statements(body)?;
         self.end_scope();
+        self.current_function_type = enclosing_function;
+
         Ok(())
     }
 }

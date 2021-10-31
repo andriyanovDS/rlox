@@ -66,8 +66,9 @@ mod tests {
         let left_expression = Expression::Unary(
             Token::new(
                 TokenType::SingleChar(SingleCharTokenType::Minus),
-                vec!['-'],
+                String::from("-"),
                 0,
+                1
             ),
             Box::new(Expression::Literal(LiteralExpression::Number(12f64))),
         );
@@ -78,8 +79,9 @@ mod tests {
             Box::new(left_expression),
             Token::new(
                 TokenType::SingleChar(SingleCharTokenType::Star),
-                vec!['*'],
+                String::from("*"),
                 1,
+                2
             ),
             Box::new(right_expression),
         );
