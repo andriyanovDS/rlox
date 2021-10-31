@@ -29,7 +29,7 @@ impl Interpreter {
         let globals = Rc::new(RefCell::new(globals));
         Self {
             globals: globals.clone(),
-            environment: globals.clone(),
+            environment: globals,
             locals: HashMap::new(),
         }
     }

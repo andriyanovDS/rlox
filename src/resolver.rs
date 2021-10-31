@@ -10,8 +10,15 @@ use std::rc::Rc;
 
 pub struct Resolver {
     interpreter: Rc<RefCell<Interpreter>>,
-    scopes: VecDeque<HashMap<String, bool>>,
+    scopes: VecDeque<HashMap<String, VariableState>>,
     current_function_type: FunctionType,
+}
+
+#[derive(Copy, Clone, PartialEq)]
+enum VariableState {
+    Declared,
+    Defined,
+    Read
 }
 
 #[derive(Copy, Clone)]
@@ -121,23 +128,26 @@ impl expression::Visitor<ResolveResult> for Resolver {
             .scopes
             .front()
             .and_then(|v| v.get(literal))
-            .map(|v| *v)
-            .unwrap_or(true);
-        if current_val {
-            self.resolve_local(literal, token.id);
-            Ok(())
-        } else {
-            Err(InterpreterError::new_from_static_str(
-                token,
-                "Can't read local variable in its own initializer.",
-            ))
+            .copied();
+
+        match current_val {
+            Some(VariableState::Declared) => {
+                Err(InterpreterError::new_from_static_str(
+                    token,
+                    "Can't read local variable in its own initializer.",
+                ))
+            },
+            _ => {
+                self.resolve_local(literal, token.id, true);
+                Ok(())
+            }
         }
     }
 
     fn visit_assignment(&mut self, token: &Token, right: &Expression) -> ResolveResult {
         self.resolve_expression(right)?;
         let variable_name: String = token.lexeme.iter().collect();
-        self.resolve_local(&variable_name, token.id);
+        self.resolve_local(&variable_name, token.id, false);
         Ok(())
     }
 
@@ -187,7 +197,14 @@ impl Resolver {
     }
 
     fn end_scope(&mut self) {
-        self.scopes.pop_front();
+        if let Some(scope) = self.scopes.pop_front() {
+            scope
+                .iter()
+                .filter(|(_, state)| state != &&VariableState::Read)
+                .for_each(|(key, _)| {
+                    eprintln!("Local variable {} is not used.", key);
+                })
+        }
     }
 
     fn resolve_statement(&mut self, statement: &Statement) -> ResolveResult {
@@ -202,11 +219,11 @@ impl Resolver {
         match self.scopes.front_mut() {
             Some(inner_scope) if inner_scope.contains_key(name) => {
                 let message = "Already a variable with this name in this scope.".to_string();
-                // TODO: we need to find a way how to pass real line number here
+                // TODO: we need to find a way how to pass a real line number here
                 Err(InterpreterError::new(0, message))
             }
             Some(inner_scope) => {
-                inner_scope.insert(name.to_string(), false);
+                inner_scope.insert(name.to_string(), VariableState::Declared);
                 Ok(())
             }
             None => Ok(()),
@@ -215,25 +232,27 @@ impl Resolver {
 
     fn define(&mut self, name: &str) {
         let option_ref = self.scopes.front_mut().and_then(|v| v.get_mut(name));
-        match option_ref {
-            Some(bool_ref) => {
-                *bool_ref = true;
-            }
-            None => {}
+        if let Some(state) = option_ref {
+            *state = VariableState::Defined;
         }
     }
 
-    fn resolve_local(&mut self, name: &str, token_id: usize) {
+    fn resolve_local(&mut self, name: &str, token_id: usize, is_read: bool)  {
         let scope_len = self.scopes.len();
-        (0..scope_len)
-            .rev()
-            .filter(|index| self.scopes[*index].contains_key(name))
-            .for_each(|index| {
-                self.interpreter
-                    .as_ref()
-                    .borrow_mut()
-                    .resolve(token_id, index)
-            })
+        for index in (0..scope_len).rev() {
+            let scope = &mut self.scopes[index];
+            if !scope.contains_key(name) {
+                continue;
+            }
+            self.interpreter
+                .as_ref()
+                .borrow_mut()
+                .resolve(token_id, index);
+
+            if is_read {
+                scope.insert(name.to_string(), VariableState::Read);
+            }
+        }
     }
 
     fn resolve_function(&mut self, params: &[String], body: &[Statement], fn_type: FunctionType) -> ResolveResult {

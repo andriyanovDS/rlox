@@ -35,7 +35,7 @@ impl<'a> Parser<'a> {
                 Ok(expression) => {
                     statements.push(expression);
                 }
-                Err(error) if error.token.token_type == TokenType::EOF => break,
+                Err(error) if error.token.token_type == TokenType::Eof => break,
                 Err(error) => {
                     self.synchronize();
                     had_error = true;
@@ -102,7 +102,7 @@ impl<'a> Parser<'a> {
                     self.advance();
                     return Ok(statements);
                 }
-                Some(TokenType::EOF) => {
+                Some(TokenType::Eof) => {
                     self.advance();
                     return Err(self.make_error("Expect '}' after block."));
                 }
@@ -657,7 +657,7 @@ mod tests {
                 1,
                 3
             ),
-            Token::new(TokenType::EOF, String::new(), 1, 4),
+            Token::new(TokenType::Eof, String::new(), 1, 4),
         ];
         let mut parser = Parser::new(&tokens);
         let statement = parser.parse();

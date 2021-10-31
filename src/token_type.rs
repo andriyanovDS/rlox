@@ -8,7 +8,7 @@ pub enum TokenType {
     ExpressionOperator(ExpressionOperatorTokenType),
     Literal(LiteralTokenType),
     Keyword(KeywordTokenType),
-    EOF,
+    Eof,
 }
 
 #[derive(Debug, PartialEq, Clone)]

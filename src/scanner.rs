@@ -68,7 +68,7 @@ impl<'a> Scanner<'a> {
             }
         }
         tokens.push(Token {
-            token_type: TokenType::EOF,
+            token_type: TokenType::Eof,
             lexeme: Vec::new(),
             line,
             id: self.make_token_id(),
@@ -177,7 +177,7 @@ impl<'a> Scanner<'a> {
     fn make_token_id(&mut self) -> usize {
         let id = self.current_id;
         self.current_id += 1;
-        return id;
+        id
     }
 
     fn matches_expression(
@@ -227,7 +227,7 @@ impl<'a> Scanner<'a> {
     fn scan_string_literal(&mut self) -> Option<(String, u32)> {
         let mut result = String::new();
         let mut new_line_count = 0u32;
-        while let Some(next) = self.source_iter.next() {
+        for next in &mut self.source_iter {
             match next {
                 '\n' => new_line_count += 1,
                 '"' => return Some((result, new_line_count)),
