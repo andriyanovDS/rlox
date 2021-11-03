@@ -95,6 +95,12 @@ impl statement::Visitor<ResolveResult> for Resolver {
             }
         }
     }
+
+    fn visit_class(&mut self, name: &str, _methods: &[Rc<LoxFunction>]) -> ResolveResult {
+        self.declare(name)?;
+        self.define(name);
+        Ok(())
+    }
 }
 
 impl expression::Visitor<ResolveResult> for Resolver {

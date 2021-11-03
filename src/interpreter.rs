@@ -149,6 +149,14 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
     fn visit_return(&mut self, expression: &Expression) -> StmtInterpretResult {
         expression.accept(self).map(Some)
     }
+
+    fn visit_class(&mut self, name: &str, _methods: &[Rc<LoxFunction>]) -> StmtInterpretResult {
+        let mut env = self.environment.as_ref().borrow_mut();
+        env.define(name.to_string(), Object::Nil);
+        let class_object = Object::Class(name.to_string());
+        env.assign(name.to_string(), class_object);
+        Ok(None)
+    }
 }
 
 impl expression::Visitor<ExprInterpretResult> for Interpreter {

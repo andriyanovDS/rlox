@@ -52,6 +52,10 @@ impl<'a> Parser<'a> {
 
     fn declaration(&mut self) -> ParseStmtResult {
         match self.tokens_iter.peek().unwrap().token_type {
+            TokenType::Keyword(KeywordTokenType::Class) => {
+                self.advance();
+                self.class_statement()
+            }
             TokenType::Keyword(KeywordTokenType::Fun) => {
                 self.advance();
                 self.function_statement()
@@ -114,7 +118,29 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn class_statement(&mut self) -> ParseStmtResult {
+        let name = self.consume_identifier(|| "Expect class name.")?;
+
+        if !self.next_matches_one(TokenType::OpenDelimiter(Delimiter::Brace)) {
+            return Err(self.make_error("Expect '{' before class methods"));
+        }
+        self.advance();
+        let mut methods = Vec::new();
+        loop {
+            if self.next_matches_one(TokenType::CloseDelimiter(Delimiter::Brace)) {
+                self.advance();
+                return Ok(Statement::Class { name, methods });
+            }
+            let method = self.parse_function()?;
+            methods.push(method);
+        }
+    }
+
     fn function_statement(&mut self) -> ParseStmtResult {
+        self.parse_function().map(Statement::Function)
+    }
+
+    fn parse_function(&mut self) -> Result<Rc<LoxFunction>, ParseError> {
         let name = self.consume_identifier(|| "Expect function name.")?;
         self.advance();
         let parameters = self.parse_function_parameters()?;
@@ -123,7 +149,7 @@ impl<'a> Parser<'a> {
             |parser| {
                 let body = parser.block()?;
                 let lox_func = LoxFunction::new(name, parameters, body);
-                Ok(Statement::Function(Rc::new(lox_func)))
+                Ok(Rc::new(lox_func))
             },
             |parser| Err(parser.make_error("Expect '{' before function body.")),
         )

@@ -22,6 +22,10 @@ pub enum Statement {
     },
     Function(Rc<LoxFunction>),
     Return(Expression),
+    Class {
+        name: String,
+        methods: Vec<Rc<LoxFunction>>
+    }
 }
 
 pub trait Visitor<T> {
@@ -38,6 +42,7 @@ pub trait Visitor<T> {
     fn visit_while(&mut self, condition: &Expression, body: &Statement) -> T;
     fn visit_function(&mut self, func: Rc<LoxFunction>) -> T;
     fn visit_return(&mut self, expression: &Expression) -> T;
+    fn visit_class(&mut self, name: &str, methods: &[Rc<LoxFunction>]) -> T;
 }
 
 impl Statement {
@@ -55,6 +60,7 @@ impl Statement {
             Statement::While { condition, body } => visitor.visit_while(condition, body),
             Statement::Function(func) => visitor.visit_function(func.clone()),
             Statement::Return(expr) => visitor.visit_return(expr),
+            Statement::Class { name, methods } => visitor.visit_class(name, methods),
         }
     }
 }

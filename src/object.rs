@@ -9,6 +9,7 @@ pub enum Object {
     String(String),
     Number(f64),
     Callable(Callable),
+    Class(String),
     NotInitialized,
 }
 
@@ -21,6 +22,7 @@ impl fmt::Display for Object {
             Object::Number(value) => write!(f, "{}", value),
             Object::Callable(callable) => callable.fmt(f),
             Object::NotInitialized => write!(f, "variable was not initialized"),
+            Object::Class(name) => write!(f, "{}", name)
         }
     }
 }
