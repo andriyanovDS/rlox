@@ -1,6 +1,8 @@
 use crate::callable::Callable;
-use std::fmt;
-use std::fmt::{Debug, Formatter};
+use crate::lox_class::Instance;
+use std::rc::Rc;
+use std::cell::RefCell;
+use std::fmt::{self, Debug, Formatter};
 
 #[derive(Debug, Clone)]
 pub enum Object {
@@ -9,7 +11,7 @@ pub enum Object {
     String(String),
     Number(f64),
     Callable(Callable),
-    Class(String),
+    Instance(Rc<RefCell<Instance>>),
     NotInitialized,
 }
 
@@ -22,7 +24,7 @@ impl fmt::Display for Object {
             Object::Number(value) => write!(f, "{}", value),
             Object::Callable(callable) => callable.fmt(f),
             Object::NotInitialized => write!(f, "variable was not initialized"),
-            Object::Class(name) => write!(f, "{}", name)
+            Object::Instance(lox_class) => lox_class.as_ref().borrow().fmt(f),
         }
     }
 }

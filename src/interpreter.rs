@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::result;
+use crate::lox_class::LoxClass;
 
 pub struct Interpreter {
     pub globals: Rc<RefCell<Environment>>,
@@ -85,7 +86,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
     }
 
     fn visit_expression(&mut self, expression: &Expression) -> StmtInterpretResult {
-        expression.accept(self).map(|_| None)
+        expression.accept(self).map(Some)
     }
 
     fn visit_variable(&mut self, name: &str, value: &Option<Expression>) -> StmtInterpretResult {
@@ -153,8 +154,11 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
     fn visit_class(&mut self, name: &str, _methods: &[Rc<LoxFunction>]) -> StmtInterpretResult {
         let mut env = self.environment.as_ref().borrow_mut();
         env.define(name.to_string(), Object::Nil);
-        let class_object = Object::Class(name.to_string());
-        env.assign(name.to_string(), class_object);
+        let class = LoxClass { name: name.to_string() };
+        let class_object = Object::Callable(Callable::LoxClass(Rc::new(class)));
+        env.assign(name.to_string(), class_object).map_err(|err_msg| {
+            InterpreterError::new(0, err_msg) // TODO: pass real line
+        })?;
         Ok(None)
     }
 }
@@ -286,6 +290,29 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
             Err(error)
         }
     }
+
+    fn visit_get(&mut self, name: &str, expression: &Expression) -> ExprInterpretResult {
+        let object = expression.accept(self)?;
+        if let Object::Instance(instance) = object {
+            let object = instance.as_ref().borrow().get(name).map_err(|err_msg| {
+                InterpreterError::new(0, err_msg) // TODO: pass real line number
+            })?;
+            Ok(object)
+        } else {
+            Err(InterpreterError::new(0, "Only instances have properties.".to_string())) // TODO: pass real line number
+        }
+    }
+
+    fn visit_set(&mut self, name: &str, object: &Expression, value: &Expression) -> ExprInterpretResult {
+        let object = object.accept(self)?;
+        if let Object::Instance(instance) = object {
+            let value = value.accept(self)?;
+            instance.as_ref().borrow_mut().set(name.to_string(), value.clone());
+            Ok(value)
+        } else {
+            Err(InterpreterError::new(0, "Only instances have fields.".to_string())) // TODO: pass real line number
+        }
+    }
 }
 
 impl Interpreter {
@@ -389,6 +416,7 @@ impl Callable {
                 declaration,
                 closure: _,
             } => declaration.arity(),
+            Callable::LoxClass(_) => 0,
         }
     }
 }

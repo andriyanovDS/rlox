@@ -180,6 +180,17 @@ impl expression::Visitor<ResolveResult> for Resolver {
         }
         Ok(())
     }
+
+    fn visit_get(&mut self, _name: &str, expression: &Expression) -> ResolveResult {
+        self.resolve_expression(expression)?;
+        Ok(())
+    }
+
+    fn visit_set(&mut self, _name: &str, object: &Expression, value: &Expression) -> ResolveResult {
+        self.resolve_expression(object)?;
+        self.resolve_expression(value)?;
+        Ok(())
+    }
 }
 
 impl Resolver {

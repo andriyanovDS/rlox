@@ -15,6 +15,8 @@ pub trait Visitor<Result> {
         close_paren: &Token,
         arguments: &[Expression],
     ) -> Result;
+    fn visit_get(&mut self, name: &str, expression: &Expression) -> Result;
+    fn visit_set(&mut self, name: &str, object: &Expression, value: &Expression) -> Result;
 }
 
 #[derive(Debug, PartialEq)]
@@ -34,6 +36,15 @@ pub enum Expression {
         close_paren: Token,
         arguments: Vec<Expression>,
     },
+    Get {
+        name: String,
+        expression: Box<Expression>
+    },
+    Set {
+        name: String,
+        object: Box<Expression>,
+        value: Box<Expression>
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -62,6 +73,8 @@ impl Expression {
                 close_paren,
                 arguments,
             } => visitor.visit_call(callee, close_paren, arguments),
+            Expression::Get { name, expression } => visitor.visit_get(name, expression),
+            Expression::Set { name, object, value } => visitor.visit_set(name, object, value),
         }
     }
 }

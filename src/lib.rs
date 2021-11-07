@@ -8,7 +8,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::{fs, io, result::Result};
 
-mod ast_printer;
 mod callable;
 mod clock;
 mod environment;
@@ -24,6 +23,7 @@ mod scanner;
 mod statement;
 mod token;
 mod token_type;
+mod lox_class;
 
 pub fn run_prompt() -> Result<(), IOError> {
     print!("> ");

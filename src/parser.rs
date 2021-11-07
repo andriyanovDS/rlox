@@ -349,10 +349,14 @@ impl<'a> Parser<'a> {
         if self.next_matches_one(equal_token_type) {
             self.advance();
             let right = self.assignment()?;
-            if let Expression::Variable { name: _, token } = left {
-                Ok(Expression::Assignment(token, Box::new(right)))
-            } else {
-                Err(self.make_error("Invalid assignment target."))
+            match left {
+                Expression::Variable { name: _, token } => {
+                    Ok(Expression::Assignment(token, Box::new(right)))
+                },
+                Expression::Get { name, expression } => {
+                    Ok(Expression::Set { name, object: expression, value: Box::new(right) })
+                },
+                _ => Err(self.make_error("Invalid assignment target."))
             }
         } else {
             Ok(left)
@@ -424,11 +428,20 @@ impl<'a> Parser<'a> {
     fn find_call(&mut self) -> ParseExprResult {
         let mut expression = self.primary()?;
         loop {
-            if self.next_matches_one(TokenType::OpenDelimiter(Delimiter::Paren)) {
-                self.advance();
-                expression = self.finish_call(expression)?;
-            } else {
-                return Ok(expression);
+            let next_token = self.tokens_iter.peek().unwrap();
+            match next_token.token_type {
+                TokenType::OpenDelimiter(Delimiter::Paren) => {
+                    self.advance();
+                    expression = self.finish_call(expression)?;
+                },
+                TokenType::SingleChar(SingleCharTokenType::Dot) => {
+                    self.advance();
+                    let name = self.consume_identifier(|| "Expect property name after '.'.")?;
+                    expression = Expression::Get { name, expression: Box::new(expression) };
+                }
+                _ => {
+                    return Ok(expression);
+                }
             }
         }
     }
