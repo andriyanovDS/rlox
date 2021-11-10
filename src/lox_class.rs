@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
+use crate::callable::Callable;
 use crate::object::Object;
 
 pub struct LoxClass {
-    pub name: String
+    pub name: String,
+    pub methods: HashMap<String, Callable>
 }
 
 pub struct Instance {
@@ -25,11 +27,18 @@ impl Instance {
         self.fields
             .get(name)
             .map(|v| v.clone())
+            .or_else(|| self.find_method(name))
             .ok_or_else(|| format!("Undefined property {}.", name))
     }
 
     pub fn set(&mut self, name: String, value: Object) {
         self.fields.insert(name, value);
+    }
+
+    fn find_method(&self, name: &str) -> Option<Object> {
+        self.class.methods
+            .get(name)
+            .map(|func| Object::Callable(func.clone()))
     }
 }
 

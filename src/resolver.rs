@@ -24,7 +24,8 @@ enum VariableState {
 #[derive(Copy, Clone)]
 enum FunctionType {
     None,
-    Function
+    Function,
+    Method
 }
 
 type ResolveResult = Result<(), InterpreterError>;
@@ -92,13 +93,20 @@ impl statement::Visitor<ResolveResult> for Resolver {
             FunctionType::Function => {
                 self.resolve_expression(expression)?;
                 Ok(())
+            },
+            FunctionType::Method => {
+                self.resolve_expression(expression)?;
+                Ok(())
             }
         }
     }
 
-    fn visit_class(&mut self, name: &str, _methods: &[Rc<LoxFunction>]) -> ResolveResult {
+    fn visit_class(&mut self, name: &str, methods: &[Rc<LoxFunction>]) -> ResolveResult {
         self.declare(name)?;
         self.define(name);
+        for method in methods {
+            self.resolve_function(&method.parameters, &method.body, FunctionType::Method)?;
+        }
         Ok(())
     }
 }

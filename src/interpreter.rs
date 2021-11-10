@@ -151,10 +151,20 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         expression.accept(self).map(Some)
     }
 
-    fn visit_class(&mut self, name: &str, _methods: &[Rc<LoxFunction>]) -> StmtInterpretResult {
+    fn visit_class(&mut self, name: &str, methods: &[Rc<LoxFunction>]) -> StmtInterpretResult {
         let mut env = self.environment.as_ref().borrow_mut();
         env.define(name.to_string(), Object::Nil);
-        let class = LoxClass { name: name.to_string() };
+
+        let methods: HashMap<String, Callable> = methods.into_iter().fold(HashMap::new(), |mut methods, method, | {
+            let callable = Callable::LoxFn {
+                declaration: method.clone(),
+                closure: self.environment.clone()
+            };
+            methods.insert(method.name.clone(), callable);
+            methods
+        });
+
+        let class = LoxClass { name: name.to_string(), methods };
         let class_object = Object::Callable(Callable::LoxClass(Rc::new(class)));
         env.assign(name.to_string(), class_object).map_err(|err_msg| {
             InterpreterError::new(0, err_msg) // TODO: pass real line
