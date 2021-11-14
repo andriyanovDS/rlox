@@ -1,6 +1,6 @@
 use crate::environment::Environment;
 use crate::error::InterpreterError;
-use crate::interpreter::Interpreter;
+use crate::interpreter::{Interpreter, InterpretedValue};
 use crate::object::Object;
 use crate::statement::Statement;
 use std::cell::RefCell;
@@ -33,7 +33,12 @@ impl LoxFunction {
             environment.define(parameter.clone(), arguments[index].clone())
         }
         let result = interpreter.execute_block(&self.body, Rc::new(RefCell::new(environment)))?;
-        Ok(result.unwrap_or(Object::Nil))
+        let object = match result {
+            InterpretedValue::None => Object::Nil,
+            InterpretedValue::Some(obj)=> obj,
+            InterpretedValue::Return(obj) => obj
+        };
+        Ok(object)
     }
 
     pub fn arity(&self) -> usize {

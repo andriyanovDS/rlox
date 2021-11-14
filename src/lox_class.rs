@@ -1,12 +1,13 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use crate::callable::Callable;
+use crate::callable::{Callable, LoxFn};
 use crate::object::Object;
 
 pub struct LoxClass {
     pub name: String,
-    pub methods: HashMap<String, Callable>
+    pub methods: HashMap<String, LoxFn>
 }
 
 pub struct Instance {
@@ -23,11 +24,11 @@ impl Instance {
         Self { class, fields: HashMap::new() }
     }
 
-    pub fn get(&self, name: &str) -> Result<Object, String> {
+    pub fn get(&self, name: &str, this: Rc<RefCell<Instance>>) -> Result<Object, String> {
         self.fields
             .get(name)
             .map(|v| v.clone())
-            .or_else(|| self.find_method(name))
+            .or_else(|| self.find_method(name, this))
             .ok_or_else(|| format!("Undefined property {}.", name))
     }
 
@@ -35,10 +36,10 @@ impl Instance {
         self.fields.insert(name, value);
     }
 
-    fn find_method(&self, name: &str) -> Option<Object> {
+    fn find_method(&self, name: &str, this: Rc<RefCell<Instance>>) -> Option<Object> {
         self.class.methods
             .get(name)
-            .map(|func| Object::Callable(func.clone()))
+            .map(|func| Object::Callable(Callable::LoxFn(func.bind(this))))
     }
 }
 

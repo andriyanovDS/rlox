@@ -1,4 +1,4 @@
-use crate::callable::Callable;
+use crate::callable::{LoxFn, Callable};
 use crate::environment::Environment;
 use crate::error::{Error, InterpreterError};
 use crate::expression::{self, Expression, LiteralExpression};
@@ -21,7 +21,13 @@ pub struct Interpreter {
     pub locals: HashMap<usize, usize>,
 }
 
-type StmtInterpretResult = Result<Option<Object>, InterpreterError>;
+pub enum InterpretedValue {
+    Some(Object),
+    Return(Object),
+    None,
+}
+
+type StmtInterpretResult = Result<InterpretedValue, InterpreterError>;
 type ExprInterpretResult = Result<Object, InterpreterError>;
 
 impl Interpreter {
@@ -61,16 +67,16 @@ impl Interpreter {
                 Err(error) => {
                     self.environment = previous_env;
                     return Err(error);
-                }
-                Ok(Some(stmt)) => {
+                },
+                Ok(InterpretedValue::Return(stmt)) => {
                     self.environment = previous_env;
-                    return Ok(Some(stmt));
+                    return Ok(InterpretedValue::Some(stmt));
                 }
                 _ => {}
             }
         }
         self.environment = previous_env;
-        Ok(None)
+        Ok(InterpretedValue::None)
     }
 }
 
@@ -79,14 +85,14 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         match expression.accept(self) {
             Ok(object) => {
                 println!("{}", object);
-                Ok(None)
+                Ok(InterpretedValue::None)
             }
             Err(err) => Err(err),
         }
     }
 
     fn visit_expression(&mut self, expression: &Expression) -> StmtInterpretResult {
-        expression.accept(self).map(Some)
+        expression.accept(self).map(InterpretedValue::Some)
     }
 
     fn visit_variable(&mut self, name: &str, value: &Option<Expression>) -> StmtInterpretResult {
@@ -98,7 +104,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
             .as_ref()
             .borrow_mut()
             .define(name.to_string(), object);
-        Ok(None)
+        Ok(InterpretedValue::None)
     }
 
     fn visit_block(&mut self, statements: &[Statement]) -> StmtInterpretResult {
@@ -119,7 +125,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
             else_branch
                 .as_ref()
                 .map(|stmt| stmt.as_ref().accept(self))
-                .unwrap_or(Ok(None))
+                .unwrap_or(Ok(InterpretedValue::None))
         }
     }
 
@@ -129,38 +135,38 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
             if condition.is_truthy() {
                 body.accept(self)?;
             } else {
-                return Ok(None);
+                return Ok(InterpretedValue::None);
             }
         }
     }
 
     fn visit_function(&mut self, func: Rc<LoxFunction>) -> StmtInterpretResult {
         let name = func.name.clone();
-        let callable = Object::Callable(Callable::LoxFn {
+        let callable = Object::Callable(Callable::LoxFn(LoxFn {
             declaration: func,
             closure: self.environment.clone(),
-        });
+        }));
         self.environment
             .as_ref()
             .borrow_mut()
             .define(name, callable);
-        Ok(None)
+        Ok(InterpretedValue::None)
     }
 
     fn visit_return(&mut self, expression: &Expression) -> StmtInterpretResult {
-        expression.accept(self).map(Some)
+        expression.accept(self).map(InterpretedValue::Return)
     }
 
     fn visit_class(&mut self, name: &str, methods: &[Rc<LoxFunction>]) -> StmtInterpretResult {
         let mut env = self.environment.as_ref().borrow_mut();
         env.define(name.to_string(), Object::Nil);
 
-        let methods: HashMap<String, Callable> = methods.into_iter().fold(HashMap::new(), |mut methods, method, | {
-            let callable = Callable::LoxFn {
+        let methods: HashMap<String, LoxFn> = methods.into_iter().fold(HashMap::new(), |mut methods, method, | {
+            let func = LoxFn {
                 declaration: method.clone(),
                 closure: self.environment.clone()
             };
-            methods.insert(method.name.clone(), callable);
+            methods.insert(method.name.clone(), func);
             methods
         });
 
@@ -169,7 +175,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         env.assign(name.to_string(), class_object).map_err(|err_msg| {
             InterpreterError::new(0, err_msg) // TODO: pass real line
         })?;
-        Ok(None)
+        Ok(InterpretedValue::None)
     }
 }
 
@@ -304,7 +310,8 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
     fn visit_get(&mut self, name: &str, expression: &Expression) -> ExprInterpretResult {
         let object = expression.accept(self)?;
         if let Object::Instance(instance) = object {
-            let object = instance.as_ref().borrow().get(name).map_err(|err_msg| {
+            let borrowed_instance = instance.as_ref().borrow();
+            let object = borrowed_instance.get(name, instance.clone()).map_err(|err_msg| {
                 InterpreterError::new(0, err_msg) // TODO: pass real line number
             })?;
             Ok(object)
@@ -322,6 +329,10 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
         } else {
             Err(InterpreterError::new(0, "Only instances have fields.".to_string())) // TODO: pass real line number
         }
+    }
+
+    fn visit_this(&mut self, token: &Token) -> ExprInterpretResult {
+        self.visit_variable("this", token)
     }
 }
 
@@ -422,10 +433,7 @@ impl Callable {
     fn arity(&self) -> usize {
         match self {
             Callable::NativeFn(func) => func.arity,
-            Callable::LoxFn {
-                declaration,
-                closure: _,
-            } => declaration.arity(),
+            Callable::LoxFn(lox_fn) => lox_fn.declaration.arity(),
             Callable::LoxClass(_) => 0,
         }
     }

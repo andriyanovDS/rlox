@@ -17,6 +17,7 @@ pub trait Visitor<Result> {
     ) -> Result;
     fn visit_get(&mut self, name: &str, expression: &Expression) -> Result;
     fn visit_set(&mut self, name: &str, object: &Expression, value: &Expression) -> Result;
+    fn visit_this(&mut self, token: &Token) -> Result;
 }
 
 #[derive(Debug, PartialEq)]
@@ -44,7 +45,8 @@ pub enum Expression {
         name: String,
         object: Box<Expression>,
         value: Box<Expression>
-    }
+    },
+    This(Token)
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -75,6 +77,7 @@ impl Expression {
             } => visitor.visit_call(callee, close_paren, arguments),
             Expression::Get { name, expression } => visitor.visit_get(name, expression),
             Expression::Set { name, object, value } => visitor.visit_set(name, object, value),
+            Expression::This(token) => visitor.visit_this(token),
         }
     }
 }

@@ -484,10 +484,10 @@ impl<'a> Parser<'a> {
             TokenType::Literal(literal) => {
                 self.advance();
                 Ok(literal.to_expression(next_token))
-            }
+            },
             TokenType::Keyword(keyword) => {
                 self.advance();
-                Ok(keyword.to_expression().expect("Expect expression"))
+                Ok(keyword.to_expression(next_token).expect("Expect expression"))
             }
             TokenType::OpenDelimiter(delimiter) if *delimiter == Delimiter::Paren => {
                 self.advance();
@@ -645,8 +645,9 @@ impl LiteralTokenType {
 }
 
 impl KeywordTokenType {
-    fn to_expression(&self) -> Option<Expression> {
+    fn to_expression(&self, token: &Token) -> Option<Expression> {
         match self {
+            KeywordTokenType::This => Some(Expression::This(token.clone())),
             KeywordTokenType::False => Some(Expression::Literal(LiteralExpression::False)),
             KeywordTokenType::True => Some(Expression::Literal(LiteralExpression::True)),
             KeywordTokenType::Nil => Some(Expression::Literal(LiteralExpression::Nil)),

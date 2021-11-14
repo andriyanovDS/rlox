@@ -29,6 +29,7 @@ enum FunctionType {
 }
 
 type ResolveResult = Result<(), InterpreterError>;
+const THIS_KEYWORD: &'static str = "this";
 
 impl statement::Visitor<ResolveResult> for Resolver {
     fn visit_print(&mut self, expression: &Expression) -> ResolveResult {
@@ -104,9 +105,15 @@ impl statement::Visitor<ResolveResult> for Resolver {
     fn visit_class(&mut self, name: &str, methods: &[Rc<LoxFunction>]) -> ResolveResult {
         self.declare(name)?;
         self.define(name);
+
+        self.begin_scope();
+        self.declare(THIS_KEYWORD)?;
+        self.define(THIS_KEYWORD);
         for method in methods {
             self.resolve_function(&method.parameters, &method.body, FunctionType::Method)?;
         }
+        self.end_scope();
+
         Ok(())
     }
 }
@@ -199,6 +206,11 @@ impl expression::Visitor<ResolveResult> for Resolver {
         self.resolve_expression(value)?;
         Ok(())
     }
+
+    fn visit_this(&mut self, token: &Token) -> ResolveResult {
+        self.resolve_local(THIS_KEYWORD, token.id, false);
+        Ok(())
+    }
 }
 
 impl Resolver {
@@ -225,7 +237,7 @@ impl Resolver {
         if let Some(scope) = self.scopes.pop_front() {
             scope
                 .iter()
-                .filter(|(_, state)| state != &&VariableState::Read)
+                .filter(|(key, state)| key != &THIS_KEYWORD && state != &&VariableState::Read)
                 .for_each(|(key, _)| {
                     eprintln!("Local variable {} is not used.", key);
                 })
