@@ -145,6 +145,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         let callable = Object::Callable(Callable::LoxFn(LoxFn {
             declaration: func,
             closure: self.environment.clone(),
+            is_initializer: false
         }));
         self.environment
             .as_ref()
@@ -164,7 +165,8 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         let methods: HashMap<String, LoxFn> = methods.into_iter().fold(HashMap::new(), |mut methods, method, | {
             let func = LoxFn {
                 declaration: method.clone(),
-                closure: self.environment.clone()
+                closure: self.environment.clone(),
+                is_initializer: method.name == CONSTRUCTOR_KEYWORD
             };
             methods.insert(method.name.clone(), func);
             methods

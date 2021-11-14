@@ -6,6 +6,7 @@ use crate::callable::{Callable, LoxFn};
 use crate::object::Object;
 
 pub const CONSTRUCTOR_KEYWORD: &'static str = "init";
+pub const THIS_KEYWORD: &'static str = "this";
 
 pub struct LoxClass {
     pub name: String,

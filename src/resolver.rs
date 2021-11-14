@@ -7,6 +7,7 @@ use crate::token::Token;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
+use crate::lox_class::THIS_KEYWORD;
 
 pub struct Resolver {
     interpreter: Rc<RefCell<Interpreter>>,
@@ -36,7 +37,6 @@ enum ClassType {
 }
 
 type ResolveResult = Result<(), InterpreterError>;
-const THIS_KEYWORD: &'static str = "this";
 
 impl statement::Visitor<ResolveResult> for Resolver {
     fn visit_print(&mut self, expression: &Expression) -> ResolveResult {
