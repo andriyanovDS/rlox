@@ -7,7 +7,7 @@ use crate::token::Token;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
-use crate::lox_class::THIS_KEYWORD;
+use crate::lox_class::{CONSTRUCTOR_KEYWORD, THIS_KEYWORD};
 
 pub struct Resolver {
     interpreter: Rc<RefCell<Interpreter>>,
@@ -23,11 +23,12 @@ enum VariableState {
     Read
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 enum FunctionType {
     None,
     Function,
-    Method
+    Method,
+    Initializer
 }
 
 #[derive(Copy, Clone)]
@@ -98,11 +99,10 @@ impl statement::Visitor<ResolveResult> for Resolver {
             FunctionType::None => {
                 Err(InterpreterError::new(0, "Can't return from top-level code.".to_string()))
             },
-            FunctionType::Function => {
-                self.resolve_expression(expression)?;
-                Ok(())
+            FunctionType::Initializer if &Expression::Literal(LiteralExpression::Nil) != expression => {
+                return Err(InterpreterError::new(0, "Can't return a value from an initializer.".to_string()));
             },
-            FunctionType::Method => {
+            _ => {
                 self.resolve_expression(expression)?;
                 Ok(())
             }
@@ -120,7 +120,12 @@ impl statement::Visitor<ResolveResult> for Resolver {
         self.declare(THIS_KEYWORD)?;
         self.define(THIS_KEYWORD);
         for method in methods {
-            self.resolve_function(&method.parameters, &method.body, FunctionType::Method)?;
+            let fn_type = if method.as_ref().name == CONSTRUCTOR_KEYWORD {
+                FunctionType::Initializer
+            } else {
+                FunctionType::Method
+            };
+            self.resolve_function(&method.parameters, &method.body, fn_type)?;
         }
         self.end_scope();
 
