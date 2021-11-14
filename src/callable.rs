@@ -3,7 +3,7 @@ use crate::error::InterpreterError;
 use crate::interpreter::Interpreter;
 use crate::lox_function::LoxFunction;
 use crate::native_function::NativeFunction;
-use crate::lox_class::{LoxClass, Instance};
+use crate::lox_class::{LoxClass, Instance, CONSTRUCTOR_KEYWORD};
 use crate::object::Object;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
@@ -33,7 +33,16 @@ impl Callable {
             Callable::LoxFn(lox_fn) => lox_fn.declaration.call(interpreter, arguments, lox_fn.closure.clone()),
             Callable::LoxClass(declaration) => {
                 let instance = Instance::new(declaration.clone());
-                Ok(Object::Instance(Rc::new(RefCell::new(instance))))
+                let rc_instance = Rc::new(RefCell::new(instance));
+                let initializer = rc_instance
+                    .as_ref()
+                    .borrow()
+                    .find_method(CONSTRUCTOR_KEYWORD, rc_instance.clone());
+                if let Some(Object::Callable(Callable::LoxFn(func))) = initializer {
+                    let func = func.bind(rc_instance.clone());
+                    func.declaration.call(interpreter, arguments, func.closure.clone())?;
+                }
+                Ok(Object::Instance(rc_instance))
             },
         }
     }

@@ -5,6 +5,8 @@ use std::rc::Rc;
 use crate::callable::{Callable, LoxFn};
 use crate::object::Object;
 
+pub const CONSTRUCTOR_KEYWORD: &'static str = "init";
+
 pub struct LoxClass {
     pub name: String,
     pub methods: HashMap<String, LoxFn>
@@ -16,7 +18,9 @@ pub struct Instance {
 }
 
 impl LoxClass {
-
+    pub fn find_method(&self, name: &str) -> Option<&LoxFn> {
+        self.methods.get(name)
+    }
 }
 
 impl Instance {
@@ -36,10 +40,8 @@ impl Instance {
         self.fields.insert(name, value);
     }
 
-    fn find_method(&self, name: &str, this: Rc<RefCell<Instance>>) -> Option<Object> {
-        self.class.methods
-            .get(name)
-            .map(|func| Object::Callable(Callable::LoxFn(func.bind(this))))
+    pub fn find_method(&self, name: &str, this: Rc<RefCell<Instance>>) -> Option<Object> {
+        self.class.find_method(name).map(|func| Object::Callable(Callable::LoxFn(func.bind(this))))
     }
 }
 

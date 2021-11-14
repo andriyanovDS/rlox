@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::result;
-use crate::lox_class::LoxClass;
+use crate::lox_class::{CONSTRUCTOR_KEYWORD, LoxClass};
 
 pub struct Interpreter {
     pub globals: Rc<RefCell<Environment>>,
@@ -434,7 +434,11 @@ impl Callable {
         match self {
             Callable::NativeFn(func) => func.arity,
             Callable::LoxFn(lox_fn) => lox_fn.declaration.arity(),
-            Callable::LoxClass(_) => 0,
+            Callable::LoxClass(class) => {
+                class.find_method(CONSTRUCTOR_KEYWORD)
+                    .map(|lox_fn| lox_fn.declaration.arity())
+                    .unwrap_or(0)
+            },
         }
     }
 }
