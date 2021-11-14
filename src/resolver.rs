@@ -12,6 +12,7 @@ pub struct Resolver {
     interpreter: Rc<RefCell<Interpreter>>,
     scopes: VecDeque<HashMap<String, VariableState>>,
     current_function_type: FunctionType,
+    current_class_type: ClassType,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -26,6 +27,12 @@ enum FunctionType {
     None,
     Function,
     Method
+}
+
+#[derive(Copy, Clone)]
+enum ClassType {
+    None,
+    Class
 }
 
 type ResolveResult = Result<(), InterpreterError>;
@@ -106,6 +113,9 @@ impl statement::Visitor<ResolveResult> for Resolver {
         self.declare(name)?;
         self.define(name);
 
+        let current_class_type = self.current_class_type;
+        self.current_class_type = ClassType::Class;
+
         self.begin_scope();
         self.declare(THIS_KEYWORD)?;
         self.define(THIS_KEYWORD);
@@ -114,6 +124,7 @@ impl statement::Visitor<ResolveResult> for Resolver {
         }
         self.end_scope();
 
+        self.current_class_type = current_class_type;
         Ok(())
     }
 }
@@ -208,8 +219,13 @@ impl expression::Visitor<ResolveResult> for Resolver {
     }
 
     fn visit_this(&mut self, token: &Token) -> ResolveResult {
-        self.resolve_local(THIS_KEYWORD, token.id, false);
-        Ok(())
+        if let ClassType::None = self.current_class_type {
+            // TODO: we need to find a way how to pass a real line number here
+            return Err(InterpreterError::new(0, "Can't use 'this' outside of a class.".to_string()))
+        } else {
+            self.resolve_local(THIS_KEYWORD, token.id, false);
+            Ok(())
+        }
     }
 }
 
@@ -218,7 +234,8 @@ impl Resolver {
         Self {
             interpreter,
             scopes: VecDeque::new(),
-            current_function_type: FunctionType::None
+            current_function_type: FunctionType::None,
+            current_class_type: ClassType::None,
         }
     }
 
