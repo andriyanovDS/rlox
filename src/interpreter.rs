@@ -9,11 +9,11 @@ use crate::token::Token;
 use crate::token_type::{
     ExpressionOperatorTokenType, KeywordTokenType, SingleCharTokenType, TokenType,
 };
+use crate::lox_class::{CONSTRUCTOR_KEYWORD, LoxClass};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::result;
-use crate::lox_class::{CONSTRUCTOR_KEYWORD, LoxClass};
 
 pub struct Interpreter {
     pub globals: Rc<RefCell<Environment>>,
@@ -158,21 +158,19 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         expression.accept(self).map(InterpretedValue::Return)
     }
 
-    fn visit_class(&mut self, name: &str, methods: &[Rc<LoxFunction>]) -> StmtInterpretResult {
+    fn visit_class(
+        &mut self,
+        name: &str,
+        methods: &[Rc<LoxFunction>],
+        static_methods: &[Rc<LoxFunction>]
+    ) -> StmtInterpretResult {
         let mut env = self.environment.as_ref().borrow_mut();
         env.define(name.to_string(), Object::Nil);
 
-        let methods: HashMap<String, LoxFn> = methods.into_iter().fold(HashMap::new(), |mut methods, method, | {
-            let func = LoxFn {
-                declaration: method.clone(),
-                closure: self.environment.clone(),
-                is_initializer: method.name == CONSTRUCTOR_KEYWORD
-            };
-            methods.insert(method.name.clone(), func);
-            methods
-        });
+        let methods = Interpreter::make_methods_map(&self.environment, methods);
+        let static_methods = Interpreter::make_methods_map(&self.environment, static_methods);
 
-        let class = LoxClass { name: name.to_string(), methods };
+        let class = LoxClass { name: name.to_string(), methods, static_methods };
         let class_object = Object::Callable(Callable::LoxClass(Rc::new(class)));
         env.assign(name.to_string(), class_object).map_err(|err_msg| {
             InterpreterError::new(0, err_msg) // TODO: pass real line
@@ -310,15 +308,25 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
     }
 
     fn visit_get(&mut self, name: &str, expression: &Expression) -> ExprInterpretResult {
-        let object = expression.accept(self)?;
-        if let Object::Instance(instance) = object {
-            let borrowed_instance = instance.as_ref().borrow();
-            let object = borrowed_instance.get(name, instance.clone()).map_err(|err_msg| {
-                InterpreterError::new(0, err_msg) // TODO: pass real line number
-            })?;
-            Ok(object)
-        } else {
-            Err(InterpreterError::new(0, "Only instances have properties.".to_string())) // TODO: pass real line number
+        match expression.accept(self)? {
+            Object::Instance(instance) => {
+                let borrowed_instance = instance.as_ref().borrow();
+                let object = borrowed_instance.get(name, instance.clone()).map_err(|err_msg| {
+                    InterpreterError::new(0, err_msg) // TODO: pass real line number
+                })?;
+                Ok(object)
+            },
+            Object::Callable(Callable::LoxClass(class)) => {
+                let class = class.as_ref();
+                let lox_fn = class.find_static_method(name).map_err(|err_msg| {
+                    InterpreterError::new(0, err_msg) // TODO: pass real line number
+                })?;
+                Ok(Object::Callable(Callable::LoxFn(lox_fn.clone())))
+            }
+            _ => {
+                // TODO: pass real line number
+                Err(InterpreterError::new(0, "Only instances have properties.".to_string()))
+            }
         }
     }
 
@@ -408,6 +416,18 @@ impl Interpreter {
             }
             _ => Err("Operands must be numbers."),
         }
+    }
+
+    fn make_methods_map(env: &Rc<RefCell<Environment>>, methods: &[Rc<LoxFunction>]) -> HashMap<String, LoxFn> {
+        methods.into_iter().fold(HashMap::new(), |mut methods, method, | {
+            let func = LoxFn {
+                declaration: method.clone(),
+                closure: env.clone(),
+                is_initializer: method.name == CONSTRUCTOR_KEYWORD
+            };
+            methods.insert(method.name.clone(), func);
+            methods
+        })
     }
 }
 

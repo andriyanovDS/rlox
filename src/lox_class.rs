@@ -10,7 +10,8 @@ pub const THIS_KEYWORD: &'static str = "this";
 
 pub struct LoxClass {
     pub name: String,
-    pub methods: HashMap<String, LoxFn>
+    pub methods: HashMap<String, LoxFn>,
+    pub static_methods: HashMap<String, LoxFn>
 }
 
 pub struct Instance {
@@ -21,6 +22,9 @@ pub struct Instance {
 impl LoxClass {
     pub fn find_method(&self, name: &str) -> Option<&LoxFn> {
         self.methods.get(name)
+    }
+    pub fn find_static_method(&self, name: &str) -> Result<&LoxFn, String> {
+        self.static_methods.get(name).ok_or_else(|| format!("Undefined static method {}.", name))
     }
 }
 

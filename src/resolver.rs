@@ -109,7 +109,12 @@ impl statement::Visitor<ResolveResult> for Resolver {
         }
     }
 
-    fn visit_class(&mut self, name: &str, methods: &[Rc<LoxFunction>]) -> ResolveResult {
+    fn visit_class(
+        &mut self,
+        name: &str,
+        methods: &[Rc<LoxFunction>],
+        static_methods: &[Rc<LoxFunction>]
+    ) -> ResolveResult {
         self.declare(name)?;
         self.define(name);
 
@@ -126,6 +131,9 @@ impl statement::Visitor<ResolveResult> for Resolver {
                 FunctionType::Method
             };
             self.resolve_function(&method.parameters, &method.body, fn_type)?;
+        }
+        for method in static_methods {
+            self.resolve_function(&method.parameters, &method.body, FunctionType::Method)?;
         }
         self.end_scope();
 

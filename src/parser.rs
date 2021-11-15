@@ -126,13 +126,20 @@ impl<'a> Parser<'a> {
         }
         self.advance();
         let mut methods = Vec::new();
+        let mut static_methods = Vec::new();
         loop {
             if self.next_matches_one(TokenType::CloseDelimiter(Delimiter::Brace)) {
                 self.advance();
-                return Ok(Statement::Class { name, methods });
+                return Ok(Statement::Class { name, methods, static_methods });
             }
-            let method = self.parse_function()?;
-            methods.push(method);
+            if self.next_matches_one(TokenType::Keyword(KeywordTokenType::Class)) {
+                self.advance();
+                let method = self.parse_function()?;
+                static_methods.push(method);
+            } else {
+                let method = self.parse_function()?;
+                methods.push(method);
+            }
         }
     }
 
