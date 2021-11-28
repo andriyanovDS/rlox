@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::expression::{Expression, LiteralExpression};
+use crate::expression::{Expression, LiteralExpression, VariableExpression};
 use crate::lox_function::LoxFunction;
 use crate::statement::Statement;
 use crate::token::Token;
@@ -120,6 +120,12 @@ impl<'a> Parser<'a> {
 
     fn class_statement(&mut self) -> ParseStmtResult {
         let name = self.consume_identifier(|| "Expect class name.")?;
+        let superclass = self
+            .parse_superclass(&name)?
+            .map(|name| VariableExpression {
+                name,
+                token: self.current.unwrap().clone()
+            });
 
         if !self.next_matches_one(TokenType::OpenDelimiter(Delimiter::Brace)) {
             return Err(self.make_error("Expect '{' before class methods"));
@@ -130,7 +136,7 @@ impl<'a> Parser<'a> {
         loop {
             if self.next_matches_one(TokenType::CloseDelimiter(Delimiter::Brace)) {
                 self.advance();
-                return Ok(Statement::Class { name, methods, static_methods });
+                return Ok(Statement::Class { name, methods, static_methods, superclass });
             }
             if self.next_matches_one(TokenType::Keyword(KeywordTokenType::Class)) {
                 self.advance();
@@ -141,6 +147,26 @@ impl<'a> Parser<'a> {
                 methods.push(method);
             }
         }
+    }
+
+    fn parse_superclass(&mut self, class_name: &str) -> Result<Option<String>, ParseError> {
+        let less_token_type = TokenType::ExpressionOperator(ExpressionOperatorTokenType::Less);
+        if !self.next_matches_one(less_token_type) {
+            return Ok(None)
+        }
+        self.advance();
+        self.parse_variable_name()
+            .ok_or_else(|| {
+                self.make_error("Expect superclass name.")
+            })
+            .and_then(|superclass| {
+                if superclass == class_name {
+                    Err(self.make_error("A class can't inherit from itself."))
+                } else {
+                    Ok(superclass)
+                }
+            })
+            .map(Some)
     }
 
     fn function_statement(&mut self) -> ParseStmtResult {
@@ -185,16 +211,27 @@ impl<'a> Parser<'a> {
     }
 
     fn variable_statement(&mut self) -> ParseStmtResult {
+        self.parse_variable_name()
+            .map(|name| {
+                self.make_variable_stmt(name.to_string())
+                    .and_then(|stmt| self.check_semicolon_after_stmt(stmt))
+            })
+            .unwrap_or_else(|| {
+                let token = self.tokens_iter.peek().unwrap();
+                Err(ParseError {
+                    token: (*token).clone(),
+                    message: "Expect variable name.",
+                })
+            })
+    }
+
+    fn parse_variable_name(&mut self) -> Option<String> {
         let token = self.tokens_iter.peek().unwrap();
         if let TokenType::Literal(LiteralTokenType::Identifier(ref name)) = token.token_type {
             self.advance();
-            self.make_variable_stmt(name.to_string())
-                .and_then(|stmt| self.check_semicolon_after_stmt(stmt))
+            Some(name.to_string())
         } else {
-            Err(ParseError {
-                token: (*token).clone(),
-                message: "Expect variable name.",
-            })
+            None
         }
     }
 
@@ -357,8 +394,8 @@ impl<'a> Parser<'a> {
             self.advance();
             let right = self.assignment()?;
             match left {
-                Expression::Variable { name: _, token } => {
-                    Ok(Expression::Assignment(token, Box::new(right)))
+                Expression::Variable(expr) => {
+                    Ok(Expression::Assignment(expr.token, Box::new(right)))
                 },
                 Expression::Get { name, expression } => {
                     Ok(Expression::Set { name, object: expression, value: Box::new(right) })
@@ -491,7 +528,11 @@ impl<'a> Parser<'a> {
             TokenType::Literal(literal) => {
                 self.advance();
                 Ok(literal.to_expression(next_token))
-            },
+            }
+            TokenType::Keyword(KeywordTokenType::Super) => {
+                self.advance();
+                self.find_super()
+            }
             TokenType::Keyword(keyword) => {
                 self.advance();
                 Ok(keyword.to_expression(next_token).expect("Expect expression"))
@@ -520,6 +561,20 @@ impl<'a> Parser<'a> {
                 message: "Expect ')' after expression.",
             }),
         }
+    }
+
+    fn find_super(&mut self) -> ParseExprResult {
+        self.advance_when_match(
+            TokenType::SingleChar(SingleCharTokenType::Dot),
+            |parser| {
+                parser.consume_identifier(|| "Expect superclass method name.")
+                    .map(|method| Expression::Super {
+                        keyword_token: parser.current.unwrap().clone(),
+                        method
+                    })
+            },
+            |parser| Err(parser.make_error("Expect '.' after 'super'."))
+        )
     }
 
     fn find_binary_expression<EL, EF>(
@@ -637,10 +692,12 @@ impl<'a> Parser<'a> {
 impl LiteralTokenType {
     fn to_expression(&self, token: &Token) -> Expression {
         match self {
-            LiteralTokenType::Identifier(name) => Expression::Variable {
-                name: name.to_string(),
-                token: token.clone(),
-            },
+            LiteralTokenType::Identifier(name) => Expression::Variable(
+                VariableExpression {
+                    name: name.to_string(),
+                    token: token.clone(),
+                }
+            ),
             LiteralTokenType::Number(number) => {
                 Expression::Literal(LiteralExpression::Number(*number))
             }

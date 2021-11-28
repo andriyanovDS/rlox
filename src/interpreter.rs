@@ -1,7 +1,7 @@
 use crate::callable::{LoxFn, Callable};
 use crate::environment::Environment;
 use crate::error::{Error, InterpreterError};
-use crate::expression::{self, Expression, LiteralExpression};
+use crate::expression::{self, Expression, LiteralExpression, VariableExpression, Visitor};
 use crate::lox_function::LoxFunction;
 use crate::object::Object;
 use crate::statement::{self, Statement};
@@ -9,7 +9,7 @@ use crate::token::Token;
 use crate::token_type::{
     ExpressionOperatorTokenType, KeywordTokenType, SingleCharTokenType, TokenType,
 };
-use crate::lox_class::{CONSTRUCTOR_KEYWORD, LoxClass};
+use crate::lox_class::{CONSTRUCTOR_KEYWORD, LoxClass, SUPER_KEYWORD, THIS_KEYWORD};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -95,7 +95,7 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         expression.accept(self).map(InterpretedValue::Some)
     }
 
-    fn visit_variable(&mut self, name: &str, value: &Option<Expression>) -> StmtInterpretResult {
+    fn visit_variable_stmt(&mut self, name: &str, value: &Option<Expression>) -> StmtInterpretResult {
         let object = value
             .as_ref()
             .map(|expr| expr.accept(self))
@@ -162,19 +162,46 @@ impl statement::Visitor<StmtInterpretResult> for Interpreter {
         &mut self,
         name: &str,
         methods: &[Rc<LoxFunction>],
-        static_methods: &[Rc<LoxFunction>]
+        static_methods: &[Rc<LoxFunction>],
+        superclass: &Option<VariableExpression>
     ) -> StmtInterpretResult {
+        let superclass = if let Some(expr) = superclass {
+            Some(self.visit_superclass(expr)?)
+        } else {
+            None
+        };
+
         let mut env = self.environment.as_ref().borrow_mut();
         env.define(name.to_string(), Object::Nil);
 
-        let methods = Interpreter::make_methods_map(&self.environment, methods);
+        let methods_env = if let Some(expr) = superclass.as_ref() {
+            let mut env = Environment::from(self.environment.clone());
+            let class_object = Object::Callable(Callable::LoxClass(expr.clone()));
+            env.define(SUPER_KEYWORD.to_string(), class_object);
+            Rc::new(RefCell::new(env))
+        } else {
+            self.environment.clone()
+        };
+        let is_new_env_added = superclass.as_ref().map(|_| true).unwrap_or(false);
+
+        let methods = Interpreter::make_methods_map(&methods_env, methods);
         let static_methods = Interpreter::make_methods_map(&self.environment, static_methods);
 
-        let class = LoxClass { name: name.to_string(), methods, static_methods };
+        let class = LoxClass {
+            name: name.to_string(),
+            methods,
+            static_methods,
+            superclass
+        };
         let class_object = Object::Callable(Callable::LoxClass(Rc::new(class)));
+
         env.assign(name.to_string(), class_object).map_err(|err_msg| {
             InterpreterError::new(0, err_msg) // TODO: pass real line
         })?;
+        drop(env);
+        if is_new_env_added {
+            self.environment = methods_env.as_ref().borrow().enclosing.as_ref().unwrap().clone();
+        }
         Ok(InterpretedValue::None)
     }
 }
@@ -344,6 +371,31 @@ impl expression::Visitor<ExprInterpretResult> for Interpreter {
     fn visit_this(&mut self, token: &Token) -> ExprInterpretResult {
         self.visit_variable("this", token)
     }
+
+    fn visit_super(&mut self, keyword_token: &Token, method: &str) -> ExprInterpretResult {
+        let distance = self.locals.get(&keyword_token.id).unwrap();
+        let object = self.environment
+            .as_ref()
+            .borrow()
+            .get_at_distance(*distance, SUPER_KEYWORD)
+            .map_err(|err_msg| InterpreterError::new_from_token(keyword_token, err_msg))?;
+        let instance = self.environment
+            .as_ref()
+            .borrow()
+            .get_at_distance(distance - 1, THIS_KEYWORD)
+            .map_err(|err_msg| InterpreterError::new_from_token(keyword_token, err_msg))?;
+        let lox_fn = match (object, instance) {
+            (Object::Callable(Callable::LoxClass(class)), Object::Instance(instance)) => {
+                class.as_ref().find_method(method).map(|method| method.bind(instance.clone()))
+            },
+            _ => None
+        };
+        lox_fn
+            .map(|lox_fn| Object::Callable(Callable::LoxFn(lox_fn)))
+            .ok_or_else(|| {
+                InterpreterError::new_from_token(keyword_token, format!("Undefined property {}.", method))
+            })
+    }
 }
 
 impl Interpreter {
@@ -428,6 +480,16 @@ impl Interpreter {
             methods.insert(method.name.clone(), func);
             methods
         })
+    }
+
+    fn visit_superclass(&mut self, expression: &VariableExpression) -> Result<Rc<LoxClass>, InterpreterError> {
+        let superclass = self.visit_variable(&expression.name, &expression.token)?;
+        if let Object::Callable(Callable::LoxClass(class)) = superclass {
+            Ok(class.clone())
+        } else {
+            let error = InterpreterError::new_from_token(&expression.token, "Superclass must be a class.".to_string());
+            Err(error)
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::error::InterpreterError;
-use crate::expression::{self, Expression, LiteralExpression};
+use crate::expression::{self, Expression, LiteralExpression, VariableExpression};
 use crate::interpreter::Interpreter;
 use crate::lox_function::LoxFunction;
 use crate::statement::{self, Statement};
@@ -7,7 +7,7 @@ use crate::token::Token;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
-use crate::lox_class::{CONSTRUCTOR_KEYWORD, THIS_KEYWORD};
+use crate::lox_class::{CONSTRUCTOR_KEYWORD, SUPER_KEYWORD, THIS_KEYWORD};
 
 pub struct Resolver {
     interpreter: Rc<RefCell<Interpreter>>,
@@ -50,7 +50,7 @@ impl statement::Visitor<ResolveResult> for Resolver {
         Ok(())
     }
 
-    fn visit_variable(&mut self, name: &str, value: &Option<Expression>) -> ResolveResult {
+    fn visit_variable_stmt(&mut self, name: &str, value: &Option<Expression>) -> ResolveResult {
         self.declare(name)?;
         if let Some(expression) = value {
             self.resolve_expression(expression)?;
@@ -113,13 +113,20 @@ impl statement::Visitor<ResolveResult> for Resolver {
         &mut self,
         name: &str,
         methods: &[Rc<LoxFunction>],
-        static_methods: &[Rc<LoxFunction>]
+        static_methods: &[Rc<LoxFunction>],
+        superclass: &Option<VariableExpression>
     ) -> ResolveResult {
         self.declare(name)?;
         self.define(name);
 
         let current_class_type = self.current_class_type;
         self.current_class_type = ClassType::Class;
+
+        if let Some(_) = superclass {
+            self.begin_scope();
+            self.declare(SUPER_KEYWORD)?;
+            self.define(SUPER_KEYWORD)
+        }
 
         self.begin_scope();
         self.declare(THIS_KEYWORD)?;
@@ -136,6 +143,10 @@ impl statement::Visitor<ResolveResult> for Resolver {
             self.resolve_function(&method.parameters, &method.body, FunctionType::Method)?;
         }
         self.end_scope();
+
+        if let Some(_) = superclass {
+            self.end_scope();
+        }
 
         self.current_class_type = current_class_type;
         Ok(())
@@ -240,6 +251,11 @@ impl expression::Visitor<ResolveResult> for Resolver {
             Ok(())
         }
     }
+
+    fn visit_super(&mut self, keyword_token: &Token, _method: &str) -> ResolveResult {
+        self.resolve_local(SUPER_KEYWORD, keyword_token.id, false);
+        Ok(())
+    }
 }
 
 impl Resolver {
@@ -267,7 +283,9 @@ impl Resolver {
         if let Some(scope) = self.scopes.pop_front() {
             scope
                 .iter()
-                .filter(|(key, state)| key != &THIS_KEYWORD && state != &&VariableState::Read)
+                .filter(|(key, state)| {
+                    key != &THIS_KEYWORD && key != &SUPER_KEYWORD && state != &&VariableState::Read
+                })
                 .for_each(|(key, _)| {
                     eprintln!("Local variable {} is not used.", key);
                 })

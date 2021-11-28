@@ -7,11 +7,13 @@ use crate::object::Object;
 
 pub const CONSTRUCTOR_KEYWORD: &'static str = "init";
 pub const THIS_KEYWORD: &'static str = "this";
+pub const SUPER_KEYWORD: &'static str = "super";
 
 pub struct LoxClass {
     pub name: String,
     pub methods: HashMap<String, LoxFn>,
-    pub static_methods: HashMap<String, LoxFn>
+    pub static_methods: HashMap<String, LoxFn>,
+    pub superclass: Option<Rc<LoxClass>>,
 }
 
 pub struct Instance {
@@ -21,8 +23,15 @@ pub struct Instance {
 
 impl LoxClass {
     pub fn find_method(&self, name: &str) -> Option<&LoxFn> {
-        self.methods.get(name)
+        self.methods
+            .get(name)
+            .or_else(|| {
+                self.superclass
+                    .as_ref()
+                    .and_then(|class| class.as_ref().find_method(name))
+            })
     }
+
     pub fn find_static_method(&self, name: &str) -> Result<&LoxFn, String> {
         self.static_methods.get(name).ok_or_else(|| format!("Undefined static method {}.", name))
     }

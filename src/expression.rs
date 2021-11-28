@@ -18,6 +18,7 @@ pub trait Visitor<Result> {
     fn visit_get(&mut self, name: &str, expression: &Expression) -> Result;
     fn visit_set(&mut self, name: &str, object: &Expression, value: &Expression) -> Result;
     fn visit_this(&mut self, token: &Token) -> Result;
+    fn visit_super(&mut self, keyword_token: &Token, method: &str) -> Result;
 }
 
 #[derive(Debug, PartialEq)]
@@ -26,10 +27,7 @@ pub enum Expression {
     Grouping(Box<Expression>),
     Literal(LiteralExpression),
     Unary(Token, Box<Expression>),
-    Variable {
-        name: String,
-        token: Token,
-    },
+    Variable(VariableExpression),
     Assignment(Token, Box<Expression>),
     Logical(Box<Expression>, Token, Box<Expression>),
     Call {
@@ -46,7 +44,11 @@ pub enum Expression {
         object: Box<Expression>,
         value: Box<Expression>
     },
-    This(Token)
+    This(Token),
+    Super {
+        keyword_token: Token,
+        method: String
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -58,6 +60,12 @@ pub enum LiteralExpression {
     Number(f64),
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct VariableExpression {
+    pub name: String,
+    pub token: Token,
+}
+
 impl Expression {
     pub fn accept<T, V: Visitor<T>>(&self, visitor: &mut V) -> T {
         match self {
@@ -67,7 +75,7 @@ impl Expression {
             Expression::Grouping(expression) => visitor.visit_grouping(expression),
             Expression::Literal(literal) => visitor.visit_literal(literal),
             Expression::Unary(operator, right) => visitor.visit_unary(operator, right),
-            Expression::Variable { name, token } => visitor.visit_variable(name, token),
+            Expression::Variable(expr) => visitor.visit_variable(&expr.name, &expr.token),
             Expression::Assignment(token, expr) => visitor.visit_assignment(token, expr),
             Expression::Logical(left, token, right) => visitor.visit_logical(left, token, right),
             Expression::Call {
@@ -78,6 +86,7 @@ impl Expression {
             Expression::Get { name, expression } => visitor.visit_get(name, expression),
             Expression::Set { name, object, value } => visitor.visit_set(name, object, value),
             Expression::This(token) => visitor.visit_this(token),
+            Expression::Super { keyword_token, method } => visitor.visit_super(keyword_token, method),
         }
     }
 }

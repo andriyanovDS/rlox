@@ -1,4 +1,4 @@
-use crate::expression::Expression;
+use crate::expression::{Expression, VariableExpression};
 use crate::lox_function::LoxFunction;
 use std::rc::Rc;
 
@@ -25,14 +25,15 @@ pub enum Statement {
     Class {
         name: String,
         methods: Vec<Rc<LoxFunction>>,
-        static_methods: Vec<Rc<LoxFunction>>
+        static_methods: Vec<Rc<LoxFunction>>,
+        superclass: Option<VariableExpression>
     }
 }
 
 pub trait Visitor<T> {
     fn visit_print(&mut self, expression: &Expression) -> T;
     fn visit_expression(&mut self, expression: &Expression) -> T;
-    fn visit_variable(&mut self, name: &str, value: &Option<Expression>) -> T;
+    fn visit_variable_stmt(&mut self, name: &str, value: &Option<Expression>) -> T;
     fn visit_block(&mut self, statements: &[Statement]) -> T;
     fn visit_if(
         &mut self,
@@ -43,7 +44,13 @@ pub trait Visitor<T> {
     fn visit_while(&mut self, condition: &Expression, body: &Statement) -> T;
     fn visit_function(&mut self, func: Rc<LoxFunction>) -> T;
     fn visit_return(&mut self, expression: &Expression) -> T;
-    fn visit_class(&mut self, name: &str, methods: &[Rc<LoxFunction>], static_methods: &[Rc<LoxFunction>]) -> T;
+    fn visit_class(
+        &mut self,
+        name: &str,
+        methods: &[Rc<LoxFunction>],
+        static_methods: &[Rc<LoxFunction>],
+        superclass: &Option<VariableExpression>
+    ) -> T;
 }
 
 impl Statement {
@@ -51,7 +58,7 @@ impl Statement {
         match self {
             Statement::Expression(expr) => visitor.visit_expression(expr),
             Statement::Print(expr) => visitor.visit_print(expr),
-            Statement::Variable { name, value } => visitor.visit_variable(name, value),
+            Statement::Variable { name, value } => visitor.visit_variable_stmt(name, value),
             Statement::Block(statements) => visitor.visit_block(statements),
             Statement::If {
                 condition,
@@ -61,8 +68,8 @@ impl Statement {
             Statement::While { condition, body } => visitor.visit_while(condition, body),
             Statement::Function(func) => visitor.visit_function(func.clone()),
             Statement::Return(expr) => visitor.visit_return(expr),
-            Statement::Class { name, methods, static_methods } => {
-                visitor.visit_class(name, methods, static_methods)
+            Statement::Class { name, methods, static_methods, superclass } => {
+                visitor.visit_class(name, methods, static_methods, superclass)
             },
         }
     }
