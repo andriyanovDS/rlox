@@ -1,5 +1,5 @@
 use crate::error::InterpreterError;
-use crate::expression::{self, Expression, LiteralExpression, VariableExpression};
+use crate::expression::{self, Expression, LiteralExpression, VariableExpression, Visitor};
 use crate::interpreter::Interpreter;
 use crate::lox_function::LoxFunction;
 use crate::statement::{self, Statement};
@@ -34,7 +34,8 @@ enum FunctionType {
 #[derive(Copy, Clone)]
 enum ClassType {
     None,
-    Class
+    Class,
+    Subclass,
 }
 
 type ResolveResult = Result<(), InterpreterError>;
@@ -120,9 +121,19 @@ impl statement::Visitor<ResolveResult> for Resolver {
         self.define(name);
 
         let current_class_type = self.current_class_type;
-        self.current_class_type = ClassType::Class;
+        self.current_class_type = superclass
+            .as_ref()
+            .map(|_| ClassType::Subclass)
+            .unwrap_or(ClassType::Class);
 
-        if let Some(_) = superclass {
+        if let Some(expression) = superclass {
+            if &expression.name == name {
+                return Err(InterpreterError::new_from_static_str(
+                    &expression.token,
+                    "A class can't inherit from itself"
+                ));
+            }
+            self.visit_variable(&expression.name, &expression.token);
             self.begin_scope();
             self.declare(SUPER_KEYWORD)?;
             self.define(SUPER_KEYWORD)
@@ -253,8 +264,21 @@ impl expression::Visitor<ResolveResult> for Resolver {
     }
 
     fn visit_super(&mut self, keyword_token: &Token, _method: &str) -> ResolveResult {
-        self.resolve_local(SUPER_KEYWORD, keyword_token.id, false);
-        Ok(())
+        match self.current_class_type {
+            ClassType::None => {
+                Err(InterpreterError::new_from_static_str(keyword_token, "Can't use 'super' outside of a class."))
+            }
+            ClassType::Class => {
+                Err(InterpreterError::new_from_static_str(
+                    keyword_token,
+                    "Can't use 'super' in a class with no superclass."
+                ))
+            }
+            ClassType::Subclass => {
+                self.resolve_local(SUPER_KEYWORD, keyword_token.id, false);
+                Ok(())
+            }
+        }
     }
 }
 
