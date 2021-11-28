@@ -121,7 +121,7 @@ impl<'a> Parser<'a> {
     fn class_statement(&mut self) -> ParseStmtResult {
         let name = self.consume_identifier(|| "Expect class name.")?;
         let superclass = self
-            .parse_superclass(&name)?
+            .parse_superclass()?
             .map(|name| VariableExpression {
                 name,
                 token: self.current.unwrap().clone()
@@ -149,7 +149,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_superclass(&mut self, class_name: &str) -> Result<Option<String>, ParseError> {
+    fn parse_superclass(&mut self) -> Result<Option<String>, ParseError> {
         let less_token_type = TokenType::ExpressionOperator(ExpressionOperatorTokenType::Less);
         if !self.next_matches_one(less_token_type) {
             return Ok(None)
@@ -158,13 +158,6 @@ impl<'a> Parser<'a> {
         self.parse_variable_name()
             .ok_or_else(|| {
                 self.make_error("Expect superclass name.")
-            })
-            .and_then(|superclass| {
-                if superclass == class_name {
-                    Err(self.make_error("A class can't inherit from itself."))
-                } else {
-                    Ok(superclass)
-                }
             })
             .map(Some)
     }
@@ -657,25 +650,32 @@ impl<'a> Parser<'a> {
     }
 
     fn synchronize(&mut self) {
-        if let Some(token) = self.current {
-            if TokenType::SingleChar(SingleCharTokenType::Semicolon) == token.token_type {
+        let mut previous = self.current;
+        self.advance();
+        loop {
+            if let Some(TokenType::SingleChar(SingleCharTokenType::Semicolon)) = previous.map(|v| &v.token_type) {
                 return;
             }
-        }
-        while let Some(token) = self.advance() {
-            if let TokenType::Keyword(ref keyword) = token.token_type {
-                match keyword {
-                    KeywordTokenType::Class
-                    | KeywordTokenType::For
-                    | KeywordTokenType::Fun
-                    | KeywordTokenType::Var
-                    | KeywordTokenType::If
-                    | KeywordTokenType::While
-                    | KeywordTokenType::Print
-                    | KeywordTokenType::Return => return,
-                    _ => continue,
+            let token = self.tokens_iter.peek().unwrap();
+            match &token.token_type {
+                TokenType::Eof => return,
+                TokenType::Keyword(keyword) => {
+                    match keyword {
+                        KeywordTokenType::Class
+                        | KeywordTokenType::For
+                        | KeywordTokenType::Fun
+                        | KeywordTokenType::Var
+                        | KeywordTokenType::If
+                        | KeywordTokenType::While
+                        | KeywordTokenType::Print
+                        | KeywordTokenType::Return => return,
+                        _ => {}
+                    }
                 }
+                _ => {}
             }
+            previous = self.current;
+            self.advance();
         }
     }
 
