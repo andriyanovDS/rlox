@@ -1,4 +1,4 @@
-use crate::token::Token;
+use super::token::Token;
 
 pub trait Error {
     fn message(&self) -> &str;

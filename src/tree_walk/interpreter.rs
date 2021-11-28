@@ -1,15 +1,15 @@
-use crate::callable::{LoxFn, Callable};
-use crate::environment::Environment;
-use crate::error::{Error, InterpreterError};
-use crate::expression::{self, Expression, LiteralExpression, VariableExpression, Visitor};
-use crate::lox_function::LoxFunction;
-use crate::object::Object;
-use crate::statement::{self, Statement};
-use crate::token::Token;
-use crate::token_type::{
+use super::callable::{LoxFn, Callable};
+use super::environment::Environment;
+use super::error::{Error, InterpreterError};
+use super::expression::{self, Expression, LiteralExpression, VariableExpression, Visitor};
+use super::lox_function::LoxFunction;
+use super::object::Object;
+use super::statement::{self, Statement};
+use super::token::Token;
+use super::token_type::{
     ExpressionOperatorTokenType, KeywordTokenType, SingleCharTokenType, TokenType,
 };
-use crate::lox_class::{CONSTRUCTOR_KEYWORD, LoxClass, SUPER_KEYWORD, THIS_KEYWORD};
+use super::lox_class::{CONSTRUCTOR_KEYWORD, LoxClass, SUPER_KEYWORD, THIS_KEYWORD};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;

@@ -1,9 +1,9 @@
-use crate::error::Error;
-use crate::expression::{Expression, LiteralExpression, VariableExpression};
-use crate::lox_function::LoxFunction;
-use crate::statement::Statement;
-use crate::token::Token;
-use crate::token_type::{
+use super::error::Error;
+use super::expression::{Expression, LiteralExpression, VariableExpression};
+use super::lox_function::LoxFunction;
+use super::statement::Statement;
+use super::token::Token;
+use super::token_type::{
     Delimiter, ExpressionOperatorTokenType, KeywordTokenType, LiteralTokenType,
     SingleCharTokenType, TokenType,
 };

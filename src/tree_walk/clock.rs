@@ -1,6 +1,6 @@
-use crate::callable::Callable;
-use crate::native_function::NativeFunction;
-use crate::object::Object;
+use super::callable::Callable;
+use super::native_function::NativeFunction;
+use super::object::Object;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 impl Object {

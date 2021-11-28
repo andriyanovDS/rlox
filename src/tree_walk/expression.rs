@@ -1,4 +1,4 @@
-use crate::token::Token;
+use super::token::Token;
 use std::fmt::Debug;
 
 pub trait Visitor<Result> {

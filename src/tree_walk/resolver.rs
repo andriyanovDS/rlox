@@ -1,13 +1,13 @@
-use crate::error::InterpreterError;
-use crate::expression::{self, Expression, LiteralExpression, VariableExpression, Visitor};
-use crate::interpreter::Interpreter;
-use crate::lox_function::LoxFunction;
-use crate::statement::{self, Statement};
-use crate::token::Token;
+use super::error::InterpreterError;
+use super::expression::{self, Expression, LiteralExpression, VariableExpression, Visitor};
+use super::interpreter::Interpreter;
+use super::lox_function::LoxFunction;
+use super::statement::{self, Statement};
+use super::token::Token;
+use super::lox_class::{CONSTRUCTOR_KEYWORD, SUPER_KEYWORD, THIS_KEYWORD};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
-use crate::lox_class::{CONSTRUCTOR_KEYWORD, SUPER_KEYWORD, THIS_KEYWORD};
 
 pub struct Resolver {
     interpreter: Rc<RefCell<Interpreter>>,

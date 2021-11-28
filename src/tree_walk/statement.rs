@@ -1,5 +1,5 @@
-use crate::expression::{Expression, VariableExpression};
-use crate::lox_function::LoxFunction;
+use super::expression::{Expression, VariableExpression};
+use super::lox_function::LoxFunction;
 use std::rc::Rc;
 
 #[derive(Debug)]

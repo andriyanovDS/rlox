@@ -1,8 +1,8 @@
-use crate::environment::Environment;
-use crate::error::InterpreterError;
-use crate::interpreter::{Interpreter, InterpretedValue};
-use crate::object::Object;
-use crate::statement::Statement;
+use super::environment::Environment;
+use super::error::InterpreterError;
+use super::interpreter::{Interpreter, InterpretedValue};
+use super::object::Object;
+use super::statement::Statement;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;

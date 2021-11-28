@@ -1,5 +1,5 @@
-use crate::token::Token;
-use crate::token_type::{
+use super::token::Token;
+use super::token_type::{
     Delimiter, ExpressionOperatorTokenType, KeywordTokenType, LiteralTokenType,
     SingleCharTokenType, TokenType,
 };

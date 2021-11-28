@@ -1,4 +1,4 @@
-use crate::object::Object;
+use super::object::Object;
 use hash_map::Entry;
 use std::cell::RefCell;
 use std::collections::{hash_map, HashMap};

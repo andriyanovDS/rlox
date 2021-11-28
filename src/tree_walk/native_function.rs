@@ -1,4 +1,4 @@
-use crate::object::Object;
+use super::object::Object;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Clone)]
@@ -9,8 +9,7 @@ pub struct NativeFunction {
 
 impl NativeFunction {
     pub fn call(&self, arguments: &[Object]) -> Object {
-        (self.on_call)(arguments);
-        Object::Nil
+        (self.on_call)(arguments)
     }
 }
 

@@ -1,5 +1,5 @@
-use crate::callable::Callable;
-use crate::lox_class::Instance;
+use super::callable::Callable;
+use super::lox_class::Instance;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{self, Debug, Formatter};

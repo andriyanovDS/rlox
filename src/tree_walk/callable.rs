@@ -1,14 +1,14 @@
-use crate::environment::Environment;
-use crate::error::InterpreterError;
-use crate::interpreter::Interpreter;
-use crate::lox_function::LoxFunction;
-use crate::native_function::NativeFunction;
-use crate::lox_class::{LoxClass, Instance, CONSTRUCTOR_KEYWORD};
-use crate::object::Object;
+use super::environment::Environment;
+use super::error::InterpreterError;
+use super::interpreter::Interpreter;
+use super::lox_function::LoxFunction;
+use super::native_function::NativeFunction;
+use super::lox_class::{LoxClass, Instance, CONSTRUCTOR_KEYWORD};
+use super::object::Object;
+use super::lox_class::THIS_KEYWORD;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use crate::lox_class::THIS_KEYWORD;
 
 #[derive(Clone)]
 pub struct LoxFn {

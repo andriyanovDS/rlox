@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use crate::callable::{Callable, LoxFn};
-use crate::object::Object;
+use super::callable::{Callable, LoxFn};
+use super::object::Object;
 
 pub const CONSTRUCTOR_KEYWORD: &'static str = "init";
 pub const THIS_KEYWORD: &'static str = "this";
