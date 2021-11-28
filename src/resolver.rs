@@ -133,7 +133,7 @@ impl statement::Visitor<ResolveResult> for Resolver {
                     "A class can't inherit from itself"
                 ));
             }
-            self.visit_variable(&expression.name, &expression.token);
+            self.visit_variable(&expression.name, &expression.token)?;
             self.begin_scope();
             self.declare(SUPER_KEYWORD)?;
             self.define(SUPER_KEYWORD)
