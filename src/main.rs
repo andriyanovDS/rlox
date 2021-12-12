@@ -1,5 +1,6 @@
 use std::{env, process};
 use rlox::tree_walk;
+use rlox::bytecode;
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -13,6 +14,7 @@ fn main() {
         }
         1 => {
             tree_walk::run_file(args[0].to_string());
+            bytecode::run_interpreter(args[0].to_string());
         }
         _ => {
             println!("Usage: rlox [script]");
