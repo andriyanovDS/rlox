@@ -1,15 +1,18 @@
-use std::fmt::{self, Display, Formatter, write};
+use std::fmt::{self, Display, Formatter};
 
+#[derive(Copy, Clone)]
 pub enum OpCode {
     Return,
-    SomeOther,
+    Constant,
+    ConstantLong
 }
 
 impl Display for OpCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             OpCode::Return => write!(f, "OP_RETURN"),
-            OpCode::SomeOther => write!(f, "Some_Other"),
+            OpCode::Constant => write!(f, "OP_CONSTANT"),
+            OpCode::ConstantLong => write!(f, "OP_CONSTANT_LONG"),
         }
     }
 }

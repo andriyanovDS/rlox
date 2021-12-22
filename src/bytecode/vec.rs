@@ -1,18 +1,14 @@
-use std::alloc::{alloc, Layout, realloc, dealloc, handle_alloc_error};
 use std::marker::PhantomData;
 use std::ops::{Deref};
-use std::ptr::{self, NonNull};
+use std::ptr;
 use std::{slice, mem};
-use std::cmp::Ordering;
-use std::convert::Infallible;
-use std::fmt::{Display, Formatter};
 use std::iter;
 use super::raw_vec::RawVec;
 use super::raw_val_iter::RawValIter;
 
 pub struct Vec<Element> {
     buffer: RawVec<Element>,
-    length: usize,
+    pub length: usize,
 }
 
 impl<Element> Vec<Element> {
