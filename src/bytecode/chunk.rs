@@ -65,7 +65,7 @@ impl Chunk {
         let mut offset = offset;
         let line = self.line(offset);
         match op_code {
-            OpCode::Return => {
+            OpCode::Return | OpCode::Negate | OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide => {
                 println!("{} {} at {}", offset, op_code, line);
                 offset += 1;
             },

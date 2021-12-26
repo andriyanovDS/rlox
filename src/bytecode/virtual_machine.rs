@@ -31,10 +31,30 @@ impl VirtualMachine {
                 OpCode::ConstantLong => {
                     let constant = chunk.read_constant_long(&mut iter);
                     self.stack.push(constant);
-                }
+                },
+                OpCode::Negate => {
+                    match self.stack.pop() {
+                        Some(Value::Double(value)) => {
+                            self.stack.push(Value::Double(-value));
+                        },
+                        _ => {},
+                    };
+                },
+                OpCode::Add => self.apply_binary_operation(|left, right| left + right),
+                OpCode::Subtract => self.apply_binary_operation(|left, right| left - right),
+                OpCode::Multiply => self.apply_binary_operation(|left, right| left * right),
+                OpCode::Divide => self.apply_binary_operation(|left, right| left / right),
             }
         }
         InterpretResult::Ok
+    }
+
+    fn apply_binary_operation<F>(&mut self, operation: F) where F: FnOnce(f32, f32) -> f32 {
+        let value = match (self.stack.pop(), self.stack.pop()) {
+            (Some(Value::Double(right)), Some(Value::Double(left))) => Value::Double(operation(left, right)),
+            _ => panic!("Unexpected values")
+        };
+        self.stack.push(value);
     }
 }
 

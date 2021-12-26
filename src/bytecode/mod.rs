@@ -15,9 +15,16 @@ mod stack;
 
 pub fn run_interpreter(_script: String) {
     let mut chunk = Chunk::new();
-    let index = chunk.add_constant(Value::Double(1.3));
+
+    let index = chunk.add_constant(Value::Double(2.0));
     chunk.push_constant(index, 0);
-    chunk.push_code(OpCode::Return, 1);
+    chunk.push_code(OpCode::Negate, 1);
+
+    let index = chunk.add_constant(Value::Double(2.0));
+    chunk.push_constant(index, 2);
+    chunk.push_code(OpCode::Add, 2);
+
+    chunk.push_code(OpCode::Return, 3);
 
     let mut virtual_machine = VirtualMachine::new();
     virtual_machine.interpret(&chunk);
