@@ -1,6 +1,7 @@
 use op_code::OpCode;
 use chunk::Chunk;
 use crate::bytecode::value::Value;
+use crate::bytecode::virtual_machine::VirtualMachine;
 
 mod chunk;
 mod op_code;
@@ -9,18 +10,15 @@ mod raw_val_iter;
 mod vec;
 mod constant_pool;
 mod value;
+mod virtual_machine;
+mod stack;
 
 pub fn run_interpreter(_script: String) {
     let mut chunk = Chunk::new();
-    chunk.push_code(OpCode::Return, 0);
     let index = chunk.add_constant(Value::Double(1.3));
-    chunk.push_code(OpCode::Constant, 1);
-    chunk.push_constant(index, 1);
+    chunk.push_constant(index, 0);
+    chunk.push_code(OpCode::Return, 1);
 
-    for index in 0..259 {
-        let index = chunk.add_constant(Value::Double(index as f32));
-        chunk.push_constant(index, 2);
-    }
-
-    chunk.disassemble("test chunk".to_string());
+    let mut virtual_machine = VirtualMachine::new();
+    virtual_machine.interpret(&chunk);
 }

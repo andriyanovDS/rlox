@@ -3,12 +3,12 @@ use super::vec::Vec;
 use super::op_code::OpCode;
 use super::constant_pool::ConstantPool;
 use std::mem;
-use std::slice;
+use std::slice::Iter;
 
 pub struct Chunk {
-    codes: Vec<u8>,
+    pub codes: Vec<u8>,
+    pub constants: ConstantPool,
     lines: Vec<LineStart>,
-    constants: ConstantPool,
 }
 
 impl Chunk {
@@ -20,31 +20,20 @@ impl Chunk {
         }
     }
 
+    #[inline]
+    pub fn byte_to_op_code(byte: u8) -> OpCode {
+        unsafe {
+            mem::transmute::<u8, OpCode>(byte)
+        }
+    }
+
     pub fn disassemble(self, name: String) {
         println!("== {} ==", name);
         let mut iter = self.codes.iter();
-        let mut index: usize = 0;
+        let mut offset: usize = 0;
         while let Some(code) = iter.next() {
-            index += 1;
-            let line = self.line(index);
-            let op_code = unsafe {
-                mem::transmute::<u8, OpCode>(code.clone())
-            };
-            match op_code {
-                OpCode::Return => println!("{} {} at {}", index, op_code, line),
-                OpCode::Constant => {
-                    let constant_index = iter.next().unwrap().clone() as usize;
-                    index += 1;
-                    println!("{} {} {:?} at {}", index, op_code, self.constants.value(constant_index), line);
-                },
-                OpCode::ConstantLong => {
-                    let constant_index = iter.next().unwrap().clone() as u32
-                        | u32::from(iter.next().unwrap().clone()) << 8u8
-                        | u32::from(iter.next().unwrap().clone()) << 16u8;
-                    index += 3;
-                    println!("{} {} {:?} at {}", index, op_code, self.constants.value(constant_index as usize), line);
-                }
-            }
+            let op_code = Chunk::byte_to_op_code(code.clone());
+            offset += self.disassemble_instruction(&op_code, &mut iter, offset);
         }
     }
 
@@ -70,6 +59,42 @@ impl Chunk {
     pub fn add_constant(&mut self, constant: Value) -> usize {
         self.constants.push(constant);
         self.constants.length() - 1
+    }
+
+    pub fn disassemble_instruction(&self, op_code: &OpCode, iter: &mut Iter<u8>, offset: usize) -> usize {
+        let mut offset = offset;
+        let line = self.line(offset);
+        match op_code {
+            OpCode::Return => {
+                println!("{} {} at {}", offset, op_code, line);
+                offset += 1;
+            },
+            OpCode::Constant => {
+                let value = self.read_constant(iter);
+                println!("{} {} {:?} at {}", offset, op_code, value, line);
+                offset += 2;
+            },
+            OpCode::ConstantLong => {
+                let value = self.read_constant_long(iter);
+                println!("{} {} {:?} at {}", offset, op_code, value, line);
+                offset += 4;
+            }
+        }
+        offset
+    }
+
+    #[inline]
+    pub fn read_constant(&self, iterator: &mut Iter<u8>) -> Value {
+        let index = iterator.next().unwrap().clone() as usize;
+        self.constants.value(index)
+    }
+
+    #[inline]
+    pub fn read_constant_long(&self, iterator: &mut Iter<u8>) -> Value {
+        let index = iterator.next().unwrap().clone() as u32
+            | u32::from(iterator.next().unwrap().clone()) << 8u8
+            | u32::from(iterator.next().unwrap().clone()) << 16u8;
+        self.constants.value(index as usize)
     }
 
     fn push(&mut self, byte: u8, line: usize) {
