@@ -31,4 +31,12 @@ impl Stack {
             Some(self.buffer[self.top_index])
         }
     }
+
+    pub fn modify_last<F>(&mut self, modifier: F) where F: FnOnce(Value) -> Value {
+        if self.top_index == 0 {
+            return;
+        }
+        let index = self.top_index - 1;
+        self.buffer[index] = modifier(self.buffer[index]);
+    }
 }

@@ -33,12 +33,11 @@ impl VirtualMachine {
                     self.stack.push(constant);
                 },
                 OpCode::Negate => {
-                    match self.stack.pop() {
-                        Some(Value::Double(value)) => {
-                            self.stack.push(Value::Double(-value));
-                        },
-                        _ => {},
-                    };
+                    self.stack.modify_last(|value| {
+                        match value {
+                            Value::Double(value) => Value::Double(-value)
+                        }
+                    });
                 },
                 OpCode::Add => self.apply_binary_operation(|left, right| left + right),
                 OpCode::Subtract => self.apply_binary_operation(|left, right| left - right),
