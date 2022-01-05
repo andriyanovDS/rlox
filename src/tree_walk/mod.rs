@@ -1,12 +1,11 @@
 use interpreter::Interpreter;
 use parser::Parser;
 use error::Error;
-use io::{BufRead, Error as IOError, Write};
 use resolver::Resolver;
 use scanner::Scanner;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::{fs, io, result::Result};
+use std::{fs, result::Result};
 
 mod callable;
 mod clock;
@@ -25,26 +24,7 @@ mod token;
 mod token_type;
 mod lox_class;
 
-pub fn run_prompt() -> Result<(), IOError> {
-    print!("> ");
-    io::stdout().flush().unwrap();
-
-    for read_result in io::stdin().lock().lines() {
-        let line = read_result?;
-        run_interpreter(line);
-
-        print!("> ");
-        io::stdout().flush().unwrap();
-    }
-    Ok(())
-}
-
-pub fn run_file(path: String) {
-    let content = fs::read_to_string(path).expect("File not found");
-    run_interpreter(content);
-}
-
-fn run_interpreter(script: String) {
+pub fn run_interpreter(script: String) {
     let mut scanner = Scanner::new(script.as_str());
     let tokens = scanner.scan_tokens();
 
