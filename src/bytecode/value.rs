@@ -1,4 +1,5 @@
 #[derive(Copy, Clone, Debug)]
 pub enum Value {
-    Double(f32)
+    Number(f32),
+    Bool(bool),
 }

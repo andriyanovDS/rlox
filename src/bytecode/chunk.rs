@@ -65,25 +65,21 @@ impl Chunk {
     }
 
     pub fn disassemble_instruction(&self, op_code: &OpCode, iter: &mut Iter<u8>, offset: usize) -> usize {
-        let mut offset = offset;
         let line = self.line(offset);
         match op_code {
             OpCode::Return | OpCode::Negate | OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide => {
                 println!("{} {} at {}", offset, op_code, line);
-                offset += 1;
             },
             OpCode::Constant => {
                 let value = self.read_constant(iter);
                 println!("{} {} {:?} at {}", offset, op_code, value, line);
-                offset += 2;
             },
             OpCode::ConstantLong => {
                 let value = self.read_constant_long(iter);
                 println!("{} {} {:?} at {}", offset, op_code, value, line);
-                offset += 4;
             }
         }
-        offset
+        offset + op_code.code_size()
     }
 
     #[inline]
@@ -111,7 +107,7 @@ impl Chunk {
         }
     }
 
-    fn line(&self, offset: usize) -> usize {
+    pub fn line(&self, offset: usize) -> usize {
         let mut start = 0;
         let mut end = self.lines.length - 1;
         loop {

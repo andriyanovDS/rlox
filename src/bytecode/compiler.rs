@@ -1,5 +1,5 @@
-use crate::bytecode::compiler::CompileError::TokenError;
-use crate::bytecode::token::Lexeme;
+use super::compiler::CompileError::TokenError;
+use super::token::Lexeme;
 use super::chunk::Chunk;
 use super::op_code::OpCode;
 use super::scanner::ScanError;
@@ -135,7 +135,7 @@ impl<'a> Compiler<'a> {
             .make_slice(self.source)
             .parse()
             .expect("Invalid number parsed");
-        let index = self.chunk.add_constant(Value::Double(number));
+        let index = self.chunk.add_constant(Value::Number(number));
         self.chunk.push_constant(index, self.previous_token().line);
         Ok(())
     }

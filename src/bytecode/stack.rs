@@ -9,7 +9,7 @@ pub struct Stack {
 impl Stack {
     pub fn new() -> Self {
         Self {
-            buffer: [Value::Double(0f32); STACK_SIZE],
+            buffer: [Value::Number(0f32); STACK_SIZE],
             top_index: 0,
         }
     }
@@ -29,6 +29,18 @@ impl Stack {
         } else {
             self.top_index -= 1;
             Some(self.buffer[self.top_index])
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.top_index = 0;
+    }
+
+    pub fn peek_end(&self, distance: usize) -> Option<&Value> {
+        if distance == 0 || self.top_index > distance {
+            None
+        } else {
+            Some(&self.buffer[self.top_index - 1 - distance])
         }
     }
 

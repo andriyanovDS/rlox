@@ -13,9 +13,11 @@ impl VirtualMachine {
     }
 
     pub fn interpret(&mut self, chunk: &Chunk) -> InterpretResult {
+        let mut offset: usize = 0;
         let mut iter = chunk.codes.iter();
         while let Some(code) = iter.next() {
             let op_code = Chunk::byte_to_op_code(code.clone());
+            offset += op_code.code_size();
             match op_code {
                 OpCode::Return => {
                     if let Some(value) = self.stack.pop() {
@@ -32,11 +34,14 @@ impl VirtualMachine {
                     self.stack.push(constant);
                 },
                 OpCode::Negate => {
-                    self.stack.modify_last(|value| {
-                        match value {
-                            Value::Double(value) => Value::Double(-value)
-                        }
-                    });
+                    let top_value = self.stack.peek_end(0).unwrap();
+                    if let Value::Number(number) = top_value {
+                        let new_number = -(*number);
+                        self.stack.modify_last(|_| Value::Number(new_number));
+                    } else {
+                        self.runtime_error("Operand must be a number.".to_string(), offset, chunk);
+                        return InterpretResult::RuntimeError;
+                    }
                 },
                 OpCode::Add => self.apply_binary_operation(|left, right| left + right),
                 OpCode::Subtract => self.apply_binary_operation(|left, right| left - right),
@@ -49,10 +54,15 @@ impl VirtualMachine {
 
     fn apply_binary_operation<F>(&mut self, operation: F) where F: FnOnce(f32, f32) -> f32 {
         let value = match (self.stack.pop(), self.stack.pop()) {
-            (Some(Value::Double(right)), Some(Value::Double(left))) => Value::Double(operation(left, right)),
+            (Some(Value::Number(right)), Some(Value::Number(left))) => Value::Number(operation(left, right)),
             _ => panic!("Unexpected values")
         };
         self.stack.push(value);
+    }
+
+    fn runtime_error(&mut self, message: String, offset: usize, chunk: &Chunk) {
+        eprintln!("{}", message);
+        eprintln!("[line {}] in script.", chunk.line(offset));
     }
 }
 

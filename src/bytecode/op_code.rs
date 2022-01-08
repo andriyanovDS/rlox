@@ -1,6 +1,6 @@
 use std::fmt::{self, Display, Formatter};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum OpCode {
     Return,
     Constant,
@@ -10,6 +10,18 @@ pub enum OpCode {
     Subtract,
     Multiply,
     Divide,
+}
+
+impl OpCode {
+    pub fn code_size(&self) -> usize {
+        if self == &OpCode::Constant {
+            2
+        } else if self == &OpCode::ConstantLong {
+            4
+        } else {
+            1
+        }
+    }
 }
 
 impl Display for OpCode {
