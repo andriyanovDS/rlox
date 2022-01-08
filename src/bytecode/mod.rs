@@ -22,7 +22,5 @@ mod parse_rule;
 
 pub fn run_interpreter(script: String) {
     let mut compiler = Compiler::new(&script);
-    if let Err(error) = compiler.compile() {
-        eprintln!("Error: {}", error.message);
-    }
+    compiler.compile();
 }

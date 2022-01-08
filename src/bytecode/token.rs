@@ -4,6 +4,7 @@ pub struct Token {
     pub line: usize,
 }
 
+#[derive(Copy, Clone)]
 pub struct Lexeme {
     pub start: usize,
     pub length: usize

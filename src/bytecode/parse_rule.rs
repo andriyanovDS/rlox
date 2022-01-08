@@ -1,5 +1,5 @@
 use super::scanner::ScanError;
-use super::compiler::Compiler;
+use super::compiler::{Compiler, CompileResult};
 use super::token::{TokenType, Token};
 use std::convert::TryFrom;
 
@@ -39,7 +39,7 @@ impl TryFrom<u8> for Precedence {
     }
 }
 
-type ParseFn<'a> = fn(&mut Compiler<'a>) -> Result<(), ScanError>;
+type ParseFn<'a> = fn(&mut Compiler<'a>) -> CompileResult;
 
 pub enum ParseType<'a> {
     Prefix(ParseFn<'a>),

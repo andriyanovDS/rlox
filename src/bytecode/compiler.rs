@@ -1,3 +1,5 @@
+use crate::bytecode::compiler::CompileError::TokenError;
+use crate::bytecode::token::Lexeme;
 use super::chunk::Chunk;
 use super::op_code::OpCode;
 use super::scanner::ScanError;
@@ -27,7 +29,13 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn compile(&mut self) -> Result<(), ScanError> {
+    pub fn compile(&mut self) {
+        if let Err(error) = self.start_compile() {
+            self.handle_error(&error);
+        }
+    }
+
+    fn start_compile(&mut self) -> CompileResult {
         self.advance()?;
         self.expression()?;
         self.consume(TokenType::Eof, "Expect end of expression.")
@@ -37,33 +45,33 @@ impl<'a> Compiler<'a> {
         self.chunk.push_code(OpCode::Return, line);
     }
 
-    fn advance(&mut self) -> Result<(), ScanError> {
+    fn advance(&mut self) -> CompileResult {
         self.previous_token = self.current_token.take();
-        let token = self.scanner.scan_token()?;
+        let token = self.scanner.scan_token().map_err(CompileError::ScanError)?;
         self.current_token = Some(token);
         Ok(())
     }
 
-    fn consume(&mut self, expected_type: TokenType, error_message: &'static str) -> Result<(), ScanError> {
+    fn consume(&mut self, expected_type: TokenType, error_message: &'static str) -> CompileResult {
         let current_token = self.current_token();
         if expected_type == current_token.token_type {
             self.advance()
         } else {
-            Err(ScanError { line: current_token.line, message: error_message })
+            Err(CompileError::make_from_token(current_token, error_message))
         }
     }
 
-    fn expression(&mut self) -> Result<(), ScanError> {
+    fn expression(&mut self) -> CompileResult {
         self.parse_precedence(Precedence::Assignment)
     }
 
-    fn parse_precedence(&mut self, precedence: Precedence) -> Result<(), ScanError> {
+    fn parse_precedence(&mut self, precedence: Precedence) -> CompileResult {
         self.advance()?;
         let token = self.previous_token();
         let rule = self.parse_rule(&token.token_type);
         match rule.parse_type.prefix() {
             Some(func) => func(self),
-            None => Err(ScanError { line: token.line, message: "Expect expression." })
+            None => Err(CompileError::make_from_token(token, "Expect expression."))
         }?;
         let precedence_int: u8 = precedence as u8;
         loop {
@@ -76,17 +84,17 @@ impl<'a> Compiler<'a> {
             let rule = self.parse_rule(&token.token_type);
             match rule.parse_type.infix() {
                 Some(func) => func(self),
-                None => Err(ScanError { line: token.line, message: "Expect expression." })
+                None => Err(CompileError::make_from_token(token, "Expect expression."))
             }?;
         }
     }
 
-    fn grouping(&mut self) -> Result<(), ScanError> {
+    fn grouping(&mut self) -> CompileResult {
         self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after expression.")
     }
 
-    fn unary(&mut self) -> Result<(), ScanError> {
+    fn unary(&mut self) -> CompileResult {
         let previous_token = self.previous_token();
         let line = previous_token.line;
         let token_type = previous_token.token_type;
@@ -100,7 +108,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn binary(&mut self) -> Result<(), ScanError> {
+    fn binary(&mut self) -> CompileResult {
         let previous_token = self.previous_token();
         let token_type = previous_token.token_type.clone();
         let token_line = previous_token.line;
@@ -120,7 +128,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn emit_number(&mut self) -> Result<(), ScanError> {
+    fn emit_number(&mut self) -> CompileResult {
         let number: f32 = self.previous_token().lexeme
             .as_ref()
             .expect("Only EOF token can not have a lexeme")
@@ -144,16 +152,18 @@ impl<'a> Compiler<'a> {
         self.previous_token.as_ref().unwrap()
     }
 
-    fn print_error(message: &'static str, line: usize) {
-        eprintln!("[line {}] Error: {}", line, message);
-    }
-
-    fn print_token_error(&self, token: &Token, message: &'static str) {
-        if token.token_type == TokenType::Eof {
-            eprintln!("[line {}] Error at end: {}", token.line, message);
-        } else {
-            let lexeme = token.lexeme.as_ref().unwrap().make_slice(self.source);
-            eprintln!("[line {}] Error at {:?}: {}", token.line, lexeme, message);
+    fn handle_error(&self, error: &CompileError) {
+        match error {
+            CompileError::ScanError(error) => {
+                eprintln!("[line {}] Error: {}", error.line, error.message);
+            }
+            CompileError::TokenError { line, lexeme, message } => {
+                if let Some(lexeme) = lexeme.as_ref() {
+                    eprintln!("[line {}] Error at {:?}: {}", line, lexeme.make_slice(self.source), message);
+                } else {
+                    eprintln!("[line {}] Error at end: {}", line, message);
+                }
+            }
         }
     }
 
@@ -222,3 +232,24 @@ impl<'a> Compiler<'a> {
         ];
     }
 }
+
+pub enum CompileError {
+    ScanError(ScanError),
+    TokenError {
+        line: usize,
+        lexeme: Option<Lexeme>,
+        message: &'static str,
+    }
+}
+
+impl CompileError {
+    fn make_from_token(token: &Token, message: &'static str) -> Self {
+        CompileError::TokenError {
+            line: token.line,
+            lexeme: token.lexeme,
+            message
+        }
+    }
+}
+
+pub type CompileResult = Result<(), CompileError>;
