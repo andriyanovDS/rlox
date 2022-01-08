@@ -1,10 +1,21 @@
-pub struct Token<'a> {
+pub struct Token {
     pub token_type: TokenType,
-    pub lexeme: Option<&'a str>,
+    pub lexeme: Option<Lexeme>,
     pub line: usize,
 }
 
-#[derive(Debug, PartialEq)]
+pub struct Lexeme {
+    pub start: usize,
+    pub length: usize
+}
+
+impl Lexeme {
+    pub fn make_slice<'a>(&self, string: &'a str) -> &'a str {
+        &string[self.start..self.start + self.length]
+    }
+}
+
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum TokenType {
     LeftParen,
     RightParen,

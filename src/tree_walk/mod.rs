@@ -5,7 +5,6 @@ use resolver::Resolver;
 use scanner::Scanner;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::{fs, result::Result};
 
 mod callable;
 mod clock;

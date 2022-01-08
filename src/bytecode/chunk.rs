@@ -38,6 +38,7 @@ impl Chunk {
     }
 
     pub fn push_code(&mut self, code: OpCode, line: usize) {
+        println!("push code {}", &code);
         let code = unsafe {
             mem::transmute::<OpCode, u8>(code.clone())
         };
@@ -45,6 +46,7 @@ impl Chunk {
     }
 
     pub fn push_constant(&mut self, index: usize, line: usize) {
+        println!("push constant at index {:?}", index);
         if index < 256 {
             self.push_code(OpCode::Constant, line);
             self.push(index as u8, line);
@@ -57,6 +59,7 @@ impl Chunk {
     }
 
     pub fn add_constant(&mut self, constant: Value) -> usize {
+        println!("add constant {:?}", &constant);
         self.constants.push(constant);
         self.constants.length() - 1
     }

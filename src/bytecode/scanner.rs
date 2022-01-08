@@ -1,6 +1,6 @@
 use std::str::Chars;
 use peekmore::{PeekMore, PeekMoreIterator};
-use crate::bytecode::token::TokenType;
+use crate::bytecode::token::{Lexeme, TokenType};
 use super::token::Token;
 
 pub struct Scanner<'a> {
@@ -25,7 +25,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_token(&mut self) -> Result<Token<'_>, ScanError> {
+    pub fn scan_token(&mut self) -> Result<Token, ScanError> {
         self.token_start_position += self.skip_whitespaces();
         match self.source_iter.next() {
             Some(character) => {
@@ -50,7 +50,7 @@ impl<'a> Scanner<'a> {
     fn make_token(&self, token_type: TokenType, start_position: usize, lexeme_length: usize) -> Token {
         Token {
             token_type,
-            lexeme: Some(&self.source[start_position..start_position+lexeme_length]),
+            lexeme: Some(Lexeme { start: start_position, length: lexeme_length }),
             line: self.line
         }
     }
@@ -63,7 +63,6 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_token_type(&mut self, first_character: &char) -> Result<(TokenType, usize), ScanError> {
-        println!("char {}", first_character);
         match first_character {
             '(' => Ok((TokenType::LeftParen, 1)),
             ')' => Ok((TokenType::RightParen, 1)),
@@ -88,7 +87,6 @@ impl<'a> Scanner<'a> {
             character if character.is_digit(10) => Ok((TokenType::Number, self.consume_number())),
             character if character.is_alphanumeric() => {
                 let length = self.consume_identifier();
-                println!("length {} - {}", length, self.token_start_position);
                 let keyword = &self.source[self.token_start_position..self.token_start_position + length];
                 Ok((self.identifier_type(keyword), length))
             },
@@ -128,11 +126,14 @@ impl<'a> Scanner<'a> {
                     self.source_iter.advance_cursor();
                     if let Some('/') = self.source_iter.peek() {
                         self.source_iter.reset_cursor();
-                        skipped += self.skip_comment() + 2;
+                        skipped += self.skip_comment();
+                    } else {
+                        self.source_iter.reset_cursor();
+                        break skipped;
                     }
                 }
                 _ => {
-                    return skipped;
+                    break skipped;
                 }
             }
         }

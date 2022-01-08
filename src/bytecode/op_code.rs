@@ -1,4 +1,4 @@
-use std::fmt::{self, Display, Formatter, write};
+use std::fmt::{self, Display, Formatter};
 
 #[derive(Copy, Clone)]
 pub enum OpCode {

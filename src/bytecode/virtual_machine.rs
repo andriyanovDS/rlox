@@ -1,9 +1,7 @@
-use std::mem;
 use super::value::Value;
 use super::stack::Stack;
 use super::op_code::OpCode;
 use super::chunk::Chunk;
-use super::compiler;
 
 pub struct VirtualMachine {
     stack: Stack
@@ -15,7 +13,6 @@ impl VirtualMachine {
     }
 
     pub fn interpret(&mut self, chunk: &Chunk) -> InterpretResult {
-        
         let mut iter = chunk.codes.iter();
         while let Some(code) = iter.next() {
             let op_code = Chunk::byte_to_op_code(code.clone());

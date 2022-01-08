@@ -1,5 +1,6 @@
 use op_code::OpCode;
 use chunk::Chunk;
+use crate::bytecode::compiler::Compiler;
 use crate::bytecode::scanner::Scanner;
 use crate::bytecode::token::TokenType;
 use crate::bytecode::value::Value;
@@ -17,37 +18,11 @@ mod stack;
 mod compiler;
 mod scanner;
 mod token;
+mod parse_rule;
 
 pub fn run_interpreter(script: String) {
-
-    let mut scanner = Scanner::new(&script);
-    loop {
-        match scanner.scan_token() {
-            Ok(token) => {
-                println!("token {:?}, {:?}, {}", token.token_type, token.lexeme, token.line);
-                if token.token_type == TokenType::Eof {
-                    break;
-                }
-            },
-            Err(error) => {
-                println!("error: {}", error.message);
-                break;
-            }
-        }
+    let mut compiler = Compiler::new(&script);
+    if let Err(error) = compiler.compile() {
+        eprintln!("Error: {}", error.message);
     }
-
-    let mut chunk = Chunk::new();
-
-    let index = chunk.add_constant(Value::Double(2.0));
-    chunk.push_constant(index, 0);
-    chunk.push_code(OpCode::Negate, 1);
-
-    let index = chunk.add_constant(Value::Double(2.0));
-    chunk.push_constant(index, 2);
-    chunk.push_code(OpCode::Add, 2);
-
-    chunk.push_code(OpCode::Return, 3);
-
-    let mut virtual_machine = VirtualMachine::new();
-    virtual_machine.interpret(&chunk);
 }
