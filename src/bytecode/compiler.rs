@@ -29,6 +29,8 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    pub fn chunk(&self) -> &Chunk { &self.chunk }
+
     pub fn compile(&mut self) {
         if let Err(error) = self.start_compile() {
             self.handle_error(&error);
@@ -140,6 +142,18 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    fn literal(&mut self) -> CompileResult {
+        let previous_token = self.previous_token();
+        let line = previous_token.line;
+        match previous_token.token_type {
+            TokenType::True => self.chunk.push_code(OpCode::True, line),
+            TokenType::False => self.chunk.push_code(OpCode::False, line),
+            TokenType::Nil => self.chunk.push_code(OpCode::Nil, line),
+            _ => {}
+        }
+        Ok(())
+    }
+
     fn parse_rule(&self, token_type: &TokenType) -> &ParseRule<'a> {
         &self.parse_rules[*token_type as usize]
     }
@@ -215,17 +229,26 @@ impl<'a> Compiler<'a> {
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::And
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Class
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Else
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::False
+            ParseRule {
+                parse_type: ParseType::Prefix(Compiler::literal),
+                precedence: Precedence::None
+            }, // TokenType::False
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::For
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Fun
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::If
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Nil
+            ParseRule {
+                parse_type: ParseType::Prefix(Compiler::literal),
+                precedence: Precedence::None
+            }, // TokenType::Nil
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Or
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Print
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Return
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Super
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::This
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::True
+            ParseRule {
+                parse_type: ParseType::Prefix(Compiler::literal),
+                precedence: Precedence::None
+            }, // TokenType::True
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Var
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::While
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Eof

@@ -69,11 +69,14 @@ impl Chunk {
         match op_code {
             OpCode::Return | OpCode::Negate | OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide => {
                 println!("{} {} at {}", offset, op_code, line);
-            },
+            }
+            OpCode::False | OpCode::True | OpCode::Nil => {
+                println!("{} {} at {}", offset, op_code, line);
+            }
             OpCode::Constant => {
                 let value = self.read_constant(iter);
                 println!("{} {} {:?} at {}", offset, op_code, value, line);
-            },
+            }
             OpCode::ConstantLong => {
                 let value = self.read_constant_long(iter);
                 println!("{} {} {:?} at {}", offset, op_code, value, line);

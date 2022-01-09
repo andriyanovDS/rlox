@@ -48,6 +48,9 @@ impl VirtualMachine {
                 OpCode::Subtract => self.apply_binary_operation(Sub::sub, offset, chunk),
                 OpCode::Multiply => self.apply_binary_operation(Mul::mul, offset, chunk),
                 OpCode::Divide => self.apply_binary_operation(Div::div, offset, chunk),
+                OpCode::True => self.stack.push(Value::Bool(true)),
+                OpCode::False => self.stack.push(Value::Bool(false)),
+                OpCode::Nil => self.stack.push(Value::Nil),
             }
         }
         InterpretResult::Ok
