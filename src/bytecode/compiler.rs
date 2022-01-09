@@ -116,16 +116,28 @@ impl<'a> Compiler<'a> {
         let rule = self.parse_rule(&token_type);
         let precedence = Precedence::try_from((rule.precedence as u8) + 1).unwrap();
         self.parse_precedence(precedence)?;
-        let op_code = match token_type {
-            TokenType::Plus => Some(OpCode::Add),
-            TokenType::Minus => Some(OpCode::Subtract),
-            TokenType::Star => Some(OpCode::Multiply),
-            TokenType::Slash => Some(OpCode::Divide),
-            _ => None
+        match token_type {
+            TokenType::Plus => self.chunk.push_code(OpCode::Add, token_line),
+            TokenType::Minus => self.chunk.push_code(OpCode::Subtract, token_line),
+            TokenType::Star => self.chunk.push_code(OpCode::Multiply, token_line),
+            TokenType::Slash => self.chunk.push_code(OpCode::Divide, token_line),
+            TokenType::BangEqual => {
+                self.chunk.push_code(OpCode::Equal, token_line);
+                self.chunk.push_code(OpCode::Not, token_line);
+            }
+            TokenType::EqualEqual => self.chunk.push_code(OpCode::Equal, token_line),
+            TokenType::Greater => self.chunk.push_code(OpCode::Greater, token_line),
+            TokenType::GreaterEqual => {
+                self.chunk.push_code(OpCode::Less, token_line);
+                self.chunk.push_code(OpCode::Not, token_line);
+            }
+            TokenType::Less => self.chunk.push_code(OpCode::Less, token_line),
+            TokenType::LessEqual => {
+                self.chunk.push_code(OpCode::Greater, token_line);
+                self.chunk.push_code(OpCode::Not, token_line);
+            }
+            _ => {}
         };
-        if let Some(op_code) = op_code {
-            self.chunk.push_code(op_code, token_line);
-        }
         Ok(())
     }
 
@@ -215,13 +227,31 @@ impl<'a> Compiler<'a> {
                 parse_type: ParseType::Prefix(Compiler::unary),
                 precedence: Precedence::None
             }, // TokenType::Bang
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::BangEqual
+            ParseRule {
+                parse_type: ParseType::Infix(Compiler::binary),
+                precedence: Precedence::Equality
+            }, // TokenType::BangEqual
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Equal
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::EqualEqual
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Greater
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::GreaterEqual
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Less
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::LessEqual
+            ParseRule {
+                parse_type: ParseType::Infix(Compiler::binary),
+                precedence: Precedence::Equality
+            }, // TokenType::EqualEqual
+            ParseRule {
+                parse_type: ParseType::Infix(Compiler::binary),
+                precedence: Precedence:: Comparison
+            }, // TokenType::Greater
+            ParseRule {
+                parse_type: ParseType::Infix(Compiler::binary),
+                precedence: Precedence:: Comparison
+            }, // TokenType::GreaterEqual
+            ParseRule {
+                parse_type: ParseType::Infix(Compiler::binary),
+                precedence: Precedence:: Comparison
+            }, // TokenType::Less
+            ParseRule {
+                parse_type: ParseType::Infix(Compiler::binary),
+                precedence: Precedence:: Comparison
+            }, // TokenType::LessEqual
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Identifier
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::String
             ParseRule {

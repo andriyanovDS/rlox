@@ -51,4 +51,8 @@ impl Stack {
         let index = self.top_index - 1;
         self.buffer[index] = modifier(self.buffer[index]);
     }
+
+    pub fn print_debug_info(&self) {
+        println!("Index {}, Result {:?}", self.top_index, &self.buffer[..self.top_index])
+    }
 }

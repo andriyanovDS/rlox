@@ -67,10 +67,10 @@ impl Chunk {
     pub fn disassemble_instruction(&self, op_code: &OpCode, iter: &mut Iter<u8>, offset: usize) -> usize {
         let line = self.line(offset);
         match op_code {
-            OpCode::Return | OpCode::Negate | OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide => {
-                println!("{} {} at {}", offset, op_code, line);
-            }
-            OpCode::False | OpCode::True | OpCode::Nil | OpCode::Not => {
+            OpCode::Return | OpCode::Negate | OpCode::Add
+            | OpCode::Subtract | OpCode::Multiply | OpCode::Divide
+            | OpCode::False | OpCode::True | OpCode::Nil
+            | OpCode::Not | OpCode::Equal | OpCode::Greater | OpCode::Less => {
                 println!("{} {} at {}", offset, op_code, line);
             }
             OpCode::Constant => {

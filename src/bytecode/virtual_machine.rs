@@ -44,8 +44,12 @@ impl VirtualMachine {
                     OpCode::False => self.stack.push(Value::Bool(false)),
                     OpCode::Nil => self.stack.push(Value::Nil),
                     OpCode::Not => self.apply_not_operation(),
+                    OpCode::Equal => self.apply_equal_operation(),
+                    OpCode::Greater => self.apply_compare_operation(|a, b| a > b, offset, chunk)?,
+                    OpCode::Less => self.apply_compare_operation(|a, b| a < b, offset, chunk)?,
                 }
             } else {
+                self.stack.print_debug_info();
                 break Ok(());
             }
         }
@@ -60,6 +64,24 @@ impl VirtualMachine {
         match (self.stack.pop(), self.stack.pop()) {
             (Some(Value::Number(right)), Some(Value::Number(left))) => {
                 self.stack.push(Value::Number(operation(left, right)));
+                Ok(())
+            }
+            _ => {
+                self.runtime_error("Operands must be numbers.".to_string(), offset, chunk);
+                Err(InterpretError::RuntimeError)
+            }
+        }
+    }
+
+    fn apply_compare_operation<F>(
+        &mut self,
+        operation: F,
+        offset: usize,
+        chunk: &Chunk,
+    ) -> InterpretResult where F: FnOnce(f32, f32) -> bool {
+        match (self.stack.pop().unwrap(), self.stack.pop().unwrap()) {
+            (Value::Number(right), Value::Number(left)) => {
+                self.stack.push(Value::Bool(operation(left, right)));
                 Ok(())
             }
             _ => {
@@ -93,6 +115,12 @@ impl VirtualMachine {
         }
     }
 
+    fn apply_equal_operation(&mut self) {
+        let left = self.stack.pop().unwrap();
+        let right = self.stack.pop().unwrap();
+        self.stack.push(Value::Bool(Value::is_equal(left, right)));
+    }
+
     fn runtime_error(&mut self, message: String, offset: usize, chunk: &Chunk) {
         eprintln!("{}", message);
         eprintln!("[line {}] in script.", chunk.line(offset));
@@ -106,3 +134,14 @@ pub enum InterpretError {
 }
 
 pub type InterpretResult = Result<(), InterpretError>;
+
+impl Value {
+    fn is_equal(left: Self, right: Self) -> bool {
+        match (left, right) {
+            (Value::Number(left), Value::Number(right)) => left == right,
+            (Value::Bool(left), Value::Bool(right)) => left == right,
+            (Value::Nil, Value::Nil) => true,
+            _ => false
+        }
+    }
+}
