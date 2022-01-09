@@ -2,6 +2,7 @@ use super::value::Value;
 use super::stack::Stack;
 use super::op_code::OpCode;
 use super::chunk::Chunk;
+use std::ops::{Add, Sub, Mul, Div};
 
 pub struct VirtualMachine {
     stack: Stack
@@ -43,21 +44,29 @@ impl VirtualMachine {
                         return InterpretResult::RuntimeError;
                     }
                 },
-                OpCode::Add => self.apply_binary_operation(|left, right| left + right),
-                OpCode::Subtract => self.apply_binary_operation(|left, right| left - right),
-                OpCode::Multiply => self.apply_binary_operation(|left, right| left * right),
-                OpCode::Divide => self.apply_binary_operation(|left, right| left / right),
+                OpCode::Add => self.apply_binary_operation(Add::add, offset, chunk),
+                OpCode::Subtract => self.apply_binary_operation(Sub::sub, offset, chunk),
+                OpCode::Multiply => self.apply_binary_operation(Mul::mul, offset, chunk),
+                OpCode::Divide => self.apply_binary_operation(Div::div, offset, chunk),
             }
         }
         InterpretResult::Ok
     }
 
-    fn apply_binary_operation<F>(&mut self, operation: F) where F: FnOnce(f32, f32) -> f32 {
-        let value = match (self.stack.pop(), self.stack.pop()) {
-            (Some(Value::Number(right)), Some(Value::Number(left))) => Value::Number(operation(left, right)),
-            _ => panic!("Unexpected values")
+    fn apply_binary_operation<F>(
+        &mut self,
+        operation: F,
+        offset: usize,
+        chunk: &Chunk,
+    ) where F: FnOnce(f32, f32) -> f32 {
+        match (self.stack.pop(), self.stack.pop()) {
+            (Some(Value::Number(right)), Some(Value::Number(left))) => {
+                self.stack.push(Value::Number(operation(left, right)));
+            }
+            _ => {
+                self.runtime_error("Operands must be numbers.".to_string(), offset, chunk);
+            }
         };
-        self.stack.push(value);
     }
 
     fn runtime_error(&mut self, message: String, offset: usize, chunk: &Chunk) {
