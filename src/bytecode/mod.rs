@@ -24,5 +24,7 @@ pub fn run_interpreter(script: String) {
     let mut compiler = Compiler::new(&script);
     compiler.compile();
     let mut virtual_machine = VirtualMachine::new();
-    virtual_machine.interpret(compiler.chunk());
+    if let Err(error) = virtual_machine.interpret(compiler.chunk()) {
+        eprintln!("Interpret failed with error {:?}", error);
+    }
 }

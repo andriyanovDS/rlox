@@ -13,6 +13,7 @@ pub enum OpCode {
     True,
     False,
     Nil,
+    Not,
 }
 
 impl OpCode {
@@ -41,6 +42,7 @@ impl Display for OpCode {
             OpCode::True => write!(f, "OP_TRUE"),
             OpCode::False => write!(f, "OP_FALSE"),
             OpCode::Nil => write!(f, "OP_NIL"),
+            OpCode::Not => write!(f, "OP_NOT"),
         }
     }
 }

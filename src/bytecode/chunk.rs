@@ -70,7 +70,7 @@ impl Chunk {
             OpCode::Return | OpCode::Negate | OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide => {
                 println!("{} {} at {}", offset, op_code, line);
             }
-            OpCode::False | OpCode::True | OpCode::Nil => {
+            OpCode::False | OpCode::True | OpCode::Nil | OpCode::Not => {
                 println!("{} {} at {}", offset, op_code, line);
             }
             OpCode::Constant => {

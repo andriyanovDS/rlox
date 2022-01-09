@@ -37,7 +37,7 @@ impl Stack {
     }
 
     pub fn peek_end(&self, distance: usize) -> Option<&Value> {
-        if distance == 0 || self.top_index > distance {
+        if self.top_index == 0 || distance > self.top_index {
             None
         } else {
             Some(&self.buffer[self.top_index - 1 - distance])

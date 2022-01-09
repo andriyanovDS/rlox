@@ -102,9 +102,8 @@ impl<'a> Compiler<'a> {
         let token_type = previous_token.token_type;
         self.parse_precedence(Precedence::Unary)?;
         match token_type {
-            TokenType::Minus => {
-                self.chunk.push_code(OpCode::Negate, line)
-            },
+            TokenType::Minus => self.chunk.push_code(OpCode::Negate, line),
+            TokenType::Bang => self.chunk.push_code(OpCode::Not, line),
             _ => {}
         }
         Ok(())
@@ -212,7 +211,10 @@ impl<'a> Compiler<'a> {
                 parse_type: ParseType::Infix(Compiler::binary),
                 precedence: Precedence::Factor
             },                                                                       // TokenType::Star
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Bang
+            ParseRule {
+                parse_type: ParseType::Prefix(Compiler::unary),
+                precedence: Precedence::None
+            }, // TokenType::Bang
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::BangEqual
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Equal
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::EqualEqual
