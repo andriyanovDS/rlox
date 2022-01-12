@@ -1,6 +1,7 @@
 use super::value::Value;
 
 const STACK_SIZE: usize = 256;
+const NOT_INITIALIZED: Value = Value::Nil;
 pub struct Stack {
     buffer: [Value; STACK_SIZE],
     top_index: usize,
@@ -9,7 +10,7 @@ pub struct Stack {
 impl Stack {
     pub fn new() -> Self {
         Self {
-            buffer: [Value::Number(0f32); STACK_SIZE],
+            buffer: [NOT_INITIALIZED; STACK_SIZE],
             top_index: 0,
         }
     }
@@ -28,7 +29,10 @@ impl Stack {
             None
         } else {
             self.top_index -= 1;
-            Some(self.buffer[self.top_index])
+            let value = unsafe {
+                std::mem::replace(&mut self.buffer[self.top_index], NOT_INITIALIZED)
+            };
+            Some(value)
         }
     }
 
@@ -44,12 +48,12 @@ impl Stack {
         }
     }
 
-    pub fn modify_last<F>(&mut self, modifier: F) where F: FnOnce(Value) -> Value {
+    pub fn modify_last(&mut self, value: Value) {
         if self.top_index == 0 {
             return;
         }
         let index = self.top_index - 1;
-        self.buffer[index] = modifier(self.buffer[index]);
+        self.buffer[index] = value;
     }
 
     pub fn print_debug_info(&self) {

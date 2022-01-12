@@ -1,10 +1,13 @@
+mod raw_val_iter;
+mod raw_vec;
+
 use std::marker::PhantomData;
 use std::ops::{Deref};
 use std::ptr;
 use std::{slice, mem};
 use std::iter;
-use super::raw_vec::RawVec;
-use super::raw_val_iter::RawValIter;
+use super::vec::raw_vec::RawVec;
+use super::vec::raw_val_iter::RawValIter;
 
 pub struct Vec<Element> {
     buffer: RawVec<Element>,

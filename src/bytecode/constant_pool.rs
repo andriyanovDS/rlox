@@ -10,8 +10,8 @@ impl ConstantPool {
         Self { values: Vec::new() }
     }
 
-    pub fn value(&self, index: usize) -> Value {
-        self.values[index]
+    pub fn value(&self, index: usize) -> &Value {
+        &self.values[index]
     }
 
     pub fn push(&mut self, value: Value) {

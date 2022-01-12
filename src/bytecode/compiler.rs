@@ -1,4 +1,3 @@
-use super::compiler::CompileError::TokenError;
 use super::token::Lexeme;
 use super::chunk::Chunk;
 use super::op_code::OpCode;
@@ -32,6 +31,7 @@ impl<'a> Compiler<'a> {
     pub fn chunk(&self) -> &Chunk { &self.chunk }
 
     pub fn compile(&mut self) {
+        println!("size: {}", std::mem::size_of::<Value>());
         if let Err(error) = self.start_compile() {
             self.handle_error(&error);
         }
@@ -148,8 +148,7 @@ impl<'a> Compiler<'a> {
             .make_slice(self.source)
             .parse()
             .expect("Invalid number parsed");
-        let index = self.chunk.add_constant(Value::Number(number));
-        self.chunk.push_constant(index, self.previous_token().line);
+        self.chunk.add_constant(Value::Number(number), self.previous_token().line);
         Ok(())
     }
 
@@ -162,6 +161,18 @@ impl<'a> Compiler<'a> {
             TokenType::Nil => self.chunk.push_code(OpCode::Nil, line),
             _ => {}
         }
+        Ok(())
+    }
+
+    fn string(&mut self) -> CompileResult {
+        let token = self.previous_token();
+        let line = token.line;
+        let lexeme = token.lexeme
+            .as_ref()
+            .unwrap()
+            .make_slice(self.source)
+            .to_string();
+        self.chunk.add_constant(Value::String(lexeme), line);
         Ok(())
     }
 
@@ -253,7 +264,10 @@ impl<'a> Compiler<'a> {
                 precedence: Precedence:: Comparison
             }, // TokenType::LessEqual
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Identifier
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::String
+            ParseRule {
+                parse_type: ParseType::Prefix(Compiler::string),
+                precedence: Precedence::None
+            }, // TokenType::String
             ParseRule {
                 parse_type: ParseType::Prefix(Compiler::emit_number),
                 precedence: Precedence::None

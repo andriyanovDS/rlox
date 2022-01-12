@@ -45,23 +45,11 @@ impl Chunk {
         self.push(code, line);
     }
 
-    pub fn push_constant(&mut self, index: usize, line: usize) {
-        println!("push constant at index {:?}", index);
-        if index < 256 {
-            self.push_code(OpCode::Constant, line);
-            self.push(index as u8, line);
-        } else {
-            self.push_code(OpCode::ConstantLong, line);
-            self.push((index & 0xff) as u8, line);
-            self.push((index >> 8u8) as u8 & 0xff, line);
-            self.push((index >> 16u8) as u8 & 0xff, line);
-        }
-    }
-
-    pub fn add_constant(&mut self, constant: Value) -> usize {
+    pub fn add_constant(&mut self, constant: Value, line: usize) {
         println!("add constant {:?}", &constant);
         self.constants.push(constant);
-        self.constants.length() - 1
+        let index = self.constants.length() - 1;
+        self.push_constant(index, line);
     }
 
     pub fn disassemble_instruction(&self, op_code: &OpCode, iter: &mut Iter<u8>, offset: usize) -> usize {
@@ -86,28 +74,17 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn read_constant(&self, iterator: &mut Iter<u8>) -> Value {
+    pub fn read_constant(&self, iterator: &mut Iter<u8>) -> &Value {
         let index = iterator.next().unwrap().clone() as usize;
         self.constants.value(index)
     }
 
     #[inline]
-    pub fn read_constant_long(&self, iterator: &mut Iter<u8>) -> Value {
+    pub fn read_constant_long(&self, iterator: &mut Iter<u8>) -> &Value {
         let index = iterator.next().unwrap().clone() as u32
             | u32::from(iterator.next().unwrap().clone()) << 8u8
             | u32::from(iterator.next().unwrap().clone()) << 16u8;
         self.constants.value(index as usize)
-    }
-
-    fn push(&mut self, byte: u8, line: usize) {
-        self.codes.push(byte);
-        match self.lines.last() {
-            None => self.lines.push(LineStart { offset: 0, line }),
-            Some(value) if value.line != line => {
-                self.lines.push(LineStart { offset: self.codes.length - 1, line })
-            },
-            _ => {}
-        }
     }
 
     pub fn line(&self, offset: usize) -> usize {
@@ -122,6 +99,30 @@ impl Chunk {
             } else {
                 start = mid + 1;
             }
+        }
+    }
+
+    fn push(&mut self, byte: u8, line: usize) {
+        self.codes.push(byte);
+        match self.lines.last() {
+            None => self.lines.push(LineStart { offset: 0, line }),
+            Some(value) if value.line != line => {
+                self.lines.push(LineStart { offset: self.codes.length - 1, line })
+            },
+            _ => {}
+        }
+    }
+
+    fn push_constant(&mut self, index: usize, line: usize) {
+        println!("push constant at index {:?}", index);
+        if index < 256 {
+            self.push_code(OpCode::Constant, line);
+            self.push(index as u8, line);
+        } else {
+            self.push_code(OpCode::ConstantLong, line);
+            self.push((index & 0xff) as u8, line);
+            self.push((index >> 8u8) as u8 & 0xff, line);
+            self.push((index >> 16u8) as u8 & 0xff, line);
         }
     }
 }

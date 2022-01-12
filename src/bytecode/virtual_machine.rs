@@ -29,14 +29,14 @@ impl VirtualMachine {
                     },
                     OpCode::Constant => {
                         let constant = chunk.read_constant(&mut iter);
-                        self.stack.push(constant);
+                        self.stack.push(constant.clone());
                     },
                     OpCode::ConstantLong => {
                         let constant = chunk.read_constant_long(&mut iter);
-                        self.stack.push(constant);
+                        self.stack.push(constant.clone());
                     },
                     OpCode::Negate => self.apply_negate_operation(offset, chunk)?,
-                    OpCode::Add => self.apply_binary_operation(Add::add, offset, chunk)?,
+                    OpCode::Add => self.apply_add_operation(offset, chunk)?,
                     OpCode::Subtract => self.apply_binary_operation(Sub::sub, offset, chunk)?,
                     OpCode::Multiply => self.apply_binary_operation(Mul::mul, offset, chunk)?,
                     OpCode::Divide => self.apply_binary_operation(Div::div, offset, chunk)?,
@@ -73,6 +73,23 @@ impl VirtualMachine {
         }
     }
 
+    fn apply_add_operation(&mut self, offset: usize, chunk: &Chunk) -> InterpretResult {
+        match (self.stack.pop().unwrap(), self.stack.pop().unwrap()) {
+            (Value::Number(right), Value::Number(left)) => {
+                self.stack.push(Value::Number(left + right));
+                Ok(())
+            }
+            (Value::String(right), Value::String(left)) => {
+                self.stack.push(Value::String(left + right.as_str()));
+                Ok(())
+            }
+            _ => {
+                self.runtime_error("Operands must be two numbers or two strings.".to_string(), offset, chunk);
+                Err(InterpretError::RuntimeError)
+            }
+        }
+    }
+
     fn apply_compare_operation<F>(
         &mut self,
         operation: F,
@@ -95,7 +112,7 @@ impl VirtualMachine {
         let top_value = self.stack.peek_end(0).unwrap();
         if let Value::Number(number) = top_value {
             let new_number = -(*number);
-            self.stack.modify_last(|_| Value::Number(new_number));
+            self.stack.modify_last(Value::Number(new_number));
             Ok(())
         } else {
             self.runtime_error("Operand must be a number.".to_string(), offset, chunk);
@@ -108,10 +125,10 @@ impl VirtualMachine {
         match top_value {
             Value::Bool(boolean) => {
                 let new_value = !(*boolean);
-                self.stack.modify_last(|_| Value::Bool(new_value));
+                self.stack.modify_last(Value::Bool(new_value));
             },
-            Value::Nil => self.stack.modify_last(|_| Value::Bool(true)),
-            _ => self.stack.modify_last(|_| Value::Bool(false)),
+            Value::Nil => self.stack.modify_last(Value::Bool(true)),
+            _ => self.stack.modify_last(Value::Bool(false)),
         }
     }
 
@@ -141,6 +158,7 @@ impl Value {
             (Value::Number(left), Value::Number(right)) => left == right,
             (Value::Bool(left), Value::Bool(right)) => left == right,
             (Value::Nil, Value::Nil) => true,
+            (Value::String(left), Value::String(right)) => left == right,
             _ => false
         }
     }
