@@ -172,7 +172,7 @@ impl<'a> Compiler<'a> {
             .unwrap()
             .make_slice(self.source)
             .to_string();
-        self.chunk.add_constant(Value::String(lexeme), line);
+        self.chunk.add_constant(Value::make_string_value(lexeme), line);
         Ok(())
     }
 

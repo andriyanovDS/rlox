@@ -12,6 +12,7 @@ mod scanner;
 mod token;
 mod parse_rule;
 mod vec;
+mod hash_map;
 
 pub fn run_interpreter(script: String) {
     let mut compiler = Compiler::new(&script);

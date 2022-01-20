@@ -79,8 +79,8 @@ impl VirtualMachine {
                 self.stack.push(Value::Number(left + right));
                 Ok(())
             }
-            (Value::String(right), Value::String(left)) => {
-                self.stack.push(Value::String(left + right.as_str()));
+            (Value::String { value: right, hash: _ }, Value::String { value: left, hash: _ }) => {
+                self.stack.push(Value::make_string_value(left + right.as_str()));
                 Ok(())
             }
             _ => {
@@ -135,7 +135,7 @@ impl VirtualMachine {
     fn apply_equal_operation(&mut self) {
         let left = self.stack.pop().unwrap();
         let right = self.stack.pop().unwrap();
-        self.stack.push(Value::Bool(Value::is_equal(left, right)));
+        self.stack.push(Value::Bool(left == right));
     }
 
     fn runtime_error(&mut self, message: String, offset: usize, chunk: &Chunk) {
@@ -151,15 +151,3 @@ pub enum InterpretError {
 }
 
 pub type InterpretResult = Result<(), InterpretError>;
-
-impl Value {
-    fn is_equal(left: Self, right: Self) -> bool {
-        match (left, right) {
-            (Value::Number(left), Value::Number(right)) => left == right,
-            (Value::Bool(left), Value::Bool(right)) => left == right,
-            (Value::Nil, Value::Nil) => true,
-            (Value::String(left), Value::String(right)) => left == right,
-            _ => false
-        }
-    }
-}
