@@ -44,6 +44,8 @@ impl<Key: Hashable + Eq, Value: Default> RawTable<Key, Value> {
             RawTable::fill_new_table(&pointer, new_capacity);
             if self.capacity > 0 {
                 self.move_items_to_new_table(&pointer, new_capacity);
+                let layout = Layout::array::<Entry<Key, Value>>(self.capacity).unwrap();
+                alloc::dealloc(self.pointer.as_ptr() as *mut u8, layout);
             }
             pointer
         };
