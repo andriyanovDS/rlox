@@ -6,7 +6,6 @@ use raw_table::{RawTable, Hashable, Entry};
 use std::cmp::Eq;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::ptr;
 
 const TABLE_MAX_LOAD: f32 = 0.75;
 
@@ -29,9 +28,9 @@ impl<Key: Hashable + Eq + Debug, Value: Debug + Default> HashTable<Key, Value> {
         unsafe {
             let mut pointer = self.pointer().add(index);
             loop {
-                let entry = ptr::read(pointer);
-                match entry.key {
-                    Some(entry_key) if key == entry_key => {
+                let entry = pointer.as_ref().unwrap();
+                match &entry.key {
+                    Some(entry_key) if &key == entry_key => {
                         break;
                     },
                     None => {
@@ -42,21 +41,26 @@ impl<Key: Hashable + Eq + Debug, Value: Debug + Default> HashTable<Key, Value> {
                     }
                 }
             }
-            ptr::write(pointer, Entry { key: Some(key), value });
+            pointer.write(Entry { key: Some(key), value });
         }
     }
 
     pub fn find(&self, key: &Key) -> Option<&Value> {
         let mut index = key.hash() % self.buffer.capacity;
-        let initial_index = index;
-        println!("index {}", initial_index);
         loop {
-            println!("next index {}", index);
             unsafe {
-                // println!("pointer: {:?}", self.pointer().add(index));
-                // let entry = self.pointer().add(index);
-                // println!("entry {:?}", entry.key);
-                return None;
+                let entry = self.pointer().add(index).as_ref().unwrap();
+                match &entry.key {
+                    None => {
+                        return None;
+                    }
+                    Some(entry_key) if entry_key == key => {
+                        return Some(&entry.value);
+                    }
+                    _ => {
+                        index = (index + 1) % self.buffer.capacity;
+                    }
+                }
             };
         }
     }
@@ -66,7 +70,6 @@ impl<Key: Hashable + Eq + Debug, Value: Debug + Default> HashTable<Key, Value> {
     }
 
     fn grow_if_needed(&mut self) {
-        println!("grow if needed {} - {}", self.buffer.capacity, self.buffer.capacity * 75 / 100);
         if self.length + 1 > self.buffer.capacity * 75 / 100 {
             self.buffer.grow();
         }
@@ -100,13 +103,14 @@ mod tests {
     #[test]
     fn resize() {
         let mut hash_map = HashTable::<String, Value>::new();
-        let first_key = "some_key".to_string();
-        let second_key = "other_key".to_string();
+        let first_key = "something".to_string();
+        let second_key = "other".to_string();
         hash_map.insert(first_key.clone(), Value::Bool(true));
         hash_map.insert(second_key.clone(), Value::Number(1f32));
         hash_map.insert("other_key_3".to_string(), Value::Number(1f32));
-        // assert_eq!(hash_map.contains(&first_key), true);
-        // assert_eq!(hash_map.contains(&"other_key".to_string()), true)
+        assert_eq!(hash_map.contains(&first_key), true);
+        assert_eq!(hash_map.contains(&second_key), true);
+        assert_eq!(hash_map.contains(&"not_inserted_key".to_string()), false);
     }
 
     impl Hashable for String {

@@ -2,7 +2,7 @@ use std::alloc::{self, Layout};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::cmp::Eq;
-use std::ptr;
+use std::fmt::Debug;
 use std::mem;
 
 pub struct RawTable<Key: Eq, Value> {
@@ -40,14 +40,13 @@ impl<Key: Hashable + Eq, Value: Default> RawTable<Key, Value> {
         assert!(new_layout.size() <= isize::MAX as usize, "Allocation too large");
 
         let new_pointer = unsafe {
-            let new_pointer = alloc::alloc(new_layout) as *mut Entry<Key, Value>;
-            RawTable::fill_new_table(new_pointer, new_capacity);
+            let pointer = alloc::alloc(new_layout) as *mut Entry<Key, Value>;
+            RawTable::fill_new_table(&pointer, new_capacity);
             if self.capacity > 0 {
-                self.move_items_to_new_table(&new_pointer, new_capacity);
+                self.move_items_to_new_table(&pointer, new_capacity);
             }
-            new_pointer
+            pointer
         };
-
         self.pointer = match NonNull::new(new_pointer) {
             Some(p) => p,
             None => alloc::handle_alloc_error(new_layout)
@@ -55,12 +54,12 @@ impl<Key: Hashable + Eq, Value: Default> RawTable<Key, Value> {
         self.capacity = new_capacity;
     }
 
-    unsafe fn fill_new_table(new_pointer: *mut Entry<Key, Value>, new_capacity: usize) {
-        for index in 0..new_capacity + 1 {
-            ptr::write(new_pointer.add(index), Entry {
+    unsafe fn fill_new_table(new_pointer: &*mut Entry<Key, Value>, new_capacity: usize) {
+        for index in 0..new_capacity {
+            new_pointer.add(index).write(Entry {
                 key: None,
                 value: Value::default()
-            })
+            });
         }
     }
 
@@ -68,9 +67,8 @@ impl<Key: Hashable + Eq, Value: Default> RawTable<Key, Value> {
         assert!(new_capacity > self.capacity);
         let old_pointer = self.pointer.as_ptr();
         let mut index = 0usize;
-        let entry_size = mem::size_of::<Entry<Key, Value>>();
         while index < self.capacity {
-            let entry = old_pointer.add(index).as_ref().unwrap();
+            let entry = old_pointer.add(index).read();
             index += 1;
             match &entry.key {
                 None => {
@@ -78,8 +76,7 @@ impl<Key: Hashable + Eq, Value: Default> RawTable<Key, Value> {
                 },
                 Some(key) => {
                     let new_index = key.hash() % new_capacity;
-                    println!("debug replace at {} to {}", index - 1, new_index);
-                    new_pointer.add(new_index).copy_from_nonoverlapping(entry, entry_size);
+                    new_pointer.add(new_index).write(entry);
                 }
             }
         }
