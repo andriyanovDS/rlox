@@ -3,7 +3,6 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::cmp::Eq;
 use std::fmt::Debug;
-use std::mem;
 
 pub struct RawTable<Key: Eq, Value> {
     pub pointer: NonNull<Entry<Key, Value>>,
@@ -65,23 +64,21 @@ impl<Key: Hashable + Eq, Value: Default> RawTable<Key, Value> {
         }
     }
 
-    unsafe fn move_items_to_new_table(&self, new_pointer: &*mut Entry<Key, Value>, new_capacity: usize) {
+    unsafe fn move_items_to_new_table(
+        &self,
+        new_pointer: &*mut Entry<Key, Value>,
+        new_capacity: usize
+    ) {
         assert!(new_capacity > self.capacity);
         let old_pointer = self.pointer.as_ptr();
-        let mut index = 0usize;
-        while index < self.capacity {
-            let entry = old_pointer.add(index).read();
-            index += 1;
-            match &entry.key {
-                None => {
-                    continue;
-                },
-                Some(key) => {
-                    let new_index = key.hash() % new_capacity;
-                    new_pointer.add(new_index).write(entry);
-                }
-            }
-        }
+        (0..self.capacity)
+            .into_iter()
+            .map(|index| old_pointer.add(index).read())
+            .filter(|entry| entry.key.is_some())
+            .for_each(|entry| {
+                let new_index = entry.key.as_ref().unwrap().hash() % new_capacity;
+                new_pointer.add(new_index).write(entry);
+            });
     }
 }
 

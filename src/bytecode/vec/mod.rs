@@ -7,7 +7,7 @@ use std::ptr;
 use std::{slice, mem};
 use std::iter;
 use super::vec::raw_val_iter::RawValIter;
-pub use super::vec::raw_vec::RawVec;
+use super::vec::raw_vec::RawVec;
 
 pub struct Vec<Element> {
     buffer: RawVec<Element>,

@@ -1,6 +1,5 @@
 mod raw_table;
 
-use super::vec::RawVec;
 use super::value::Value;
 use raw_table::{RawTable, Hashable, Entry};
 use std::cmp::Eq;
@@ -10,17 +9,18 @@ use std::fmt::Debug;
 const TABLE_MAX_LOAD: f32 = 0.75;
 
 pub struct HashTable<Key: Hashable + Eq, Value> {
-    length: usize,
+    pub length: usize,
     buffer: RawTable<Key, Value>,
 }
 
-impl<Key: Hashable + Eq + Debug, Value: Debug + Default> HashTable<Key, Value> {
+impl<Key: Hashable + Eq, Value: Default> HashTable<Key, Value> {
     pub fn new() -> Self {
         Self {
             length: 0,
             buffer: RawTable::new(),
         }
     }
+
     pub fn insert(&mut self, key: Key, value: Value) {
         self.grow_if_needed();
         self.length += 1;
@@ -30,12 +30,8 @@ impl<Key: Hashable + Eq + Debug, Value: Debug + Default> HashTable<Key, Value> {
             loop {
                 let entry = pointer.as_ref().unwrap();
                 match &entry.key {
-                    Some(entry_key) if &key == entry_key => {
-                        break;
-                    },
-                    None => {
-                        break;
-                    }
+                    Some(entry_key) if &key == entry_key => { break; },
+                    None => { break; }
                     _ => {
                         pointer = self.pointer().add((index + 1) % self.buffer.capacity)
                     }
@@ -45,17 +41,19 @@ impl<Key: Hashable + Eq + Debug, Value: Debug + Default> HashTable<Key, Value> {
         }
     }
 
+    pub fn contains(&self, key: &Key) -> bool {
+        self.find(key).is_some()
+    }
+
     pub fn find(&self, key: &Key) -> Option<&Value> {
         let mut index = key.hash() % self.buffer.capacity;
         loop {
             unsafe {
                 let entry = self.pointer().add(index).as_ref().unwrap();
                 match &entry.key {
-                    None => {
-                        return None;
-                    }
+                    None => { break None; }
                     Some(entry_key) if entry_key == key => {
-                        return Some(&entry.value);
+                        break Some(&entry.value);
                     }
                     _ => {
                         index = (index + 1) % self.buffer.capacity;
@@ -63,10 +61,6 @@ impl<Key: Hashable + Eq + Debug, Value: Debug + Default> HashTable<Key, Value> {
                 }
             };
         }
-    }
-
-    pub fn contains(&self, key: &Key) -> bool {
-        self.find(key).is_some()
     }
 
     fn grow_if_needed(&mut self) {
