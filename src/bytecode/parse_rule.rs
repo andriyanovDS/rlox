@@ -1,6 +1,4 @@
-use super::scanner::ScanError;
 use super::compiler::{Compiler, CompileResult};
-use super::token::{TokenType, Token};
 use std::convert::TryFrom;
 
 #[derive(Copy, Clone, Debug)]

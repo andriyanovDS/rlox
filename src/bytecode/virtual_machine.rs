@@ -2,7 +2,7 @@ use super::value::Value;
 use super::stack::Stack;
 use super::op_code::OpCode;
 use super::chunk::Chunk;
-use std::ops::{Add, Sub, Mul, Div};
+use std::ops::{Sub, Mul, Div};
 
 pub struct VirtualMachine {
     stack: Stack
