@@ -16,8 +16,8 @@ mod scanner;
 mod token;
 mod parse_rule;
 mod vec;
-mod hash_table;
-mod object_string;
+pub mod object_string;
+pub mod hash_table;
 
 pub fn run_interpreter(script: String) {
     let interned_strings = Rc::new(
