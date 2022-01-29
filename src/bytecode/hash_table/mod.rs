@@ -11,10 +11,7 @@ pub struct HashTable<Key: Hashable + PartialEq, Value> {
 
 impl<Key: Hashable + PartialEq, Value: Default> HashTable<Key, Value> {
     pub fn new() -> Self {
-        Self {
-            length: 0,
-            buffer: RawTable::new(),
-        }
+        Self::default()
     }
 
     pub fn insert(&mut self, key: Key, value: Value) {
@@ -140,6 +137,15 @@ impl<Key: Hashable + PartialEq, Value: Default> HashTable<Key, Value> {
 
     fn pointer(&self) -> *mut Entry<Key, Value> {
         self.buffer.pointer.as_ptr()
+    }
+}
+
+impl<Key: Hashable + PartialEq, Value: Default> Default for HashTable<Key, Value> {
+    fn default() -> Self {
+        Self {
+            length: 0,
+            buffer: RawTable::new(),
+        }
     }
 }
 
