@@ -1,4 +1,4 @@
-use super::compiler::{Compiler, CompileResult};
+use super::compiler::{Compiler, CompilationResult};
 use std::convert::TryFrom;
 
 #[derive(Copy, Clone, Debug)]
@@ -37,7 +37,7 @@ impl TryFrom<u8> for Precedence {
     }
 }
 
-type ParseFn<'a> = fn(&mut Compiler<'a>) -> CompileResult;
+type ParseFn<'a> = fn(&mut Compiler<'a>) -> CompilationResult;
 
 pub enum ParseType<'a> {
     Prefix(ParseFn<'a>),

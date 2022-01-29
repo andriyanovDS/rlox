@@ -1,9 +1,9 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::cmp::PartialEq;
 use std::rc::Rc;
 use super::object_string::ObjectString;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Value {
     Number(f32),
     Bool(bool),
@@ -25,6 +25,17 @@ impl PartialEq for Value {
                 Rc::as_ptr(left) == Rc::as_ptr(right)
             },
             _ => false
+        }
+    }
+}
+
+impl Debug for Value {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Bool(boolean) => write!(formatter, "{}", boolean),
+            Value::Number(number) => write!(formatter, "{}", number),
+            Value::String(object) => write!(formatter, "{:?}", object.as_ref().value),
+            Value::Nil => write!(formatter, "Nil")
         }
     }
 }

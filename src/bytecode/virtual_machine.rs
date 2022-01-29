@@ -55,6 +55,7 @@ impl VirtualMachine {
                     OpCode::Equal => self.apply_equal_operation(),
                     OpCode::Greater => self.apply_compare_operation(|a, b| a > b, offset, chunk)?,
                     OpCode::Less => self.apply_compare_operation(|a, b| a < b, offset, chunk)?,
+                    OpCode::Print => println!("{:?}", self.stack.pop().unwrap())
                 }
             } else {
                 self.stack.print_debug_info();

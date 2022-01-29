@@ -40,30 +40,38 @@ impl<'a> Compiler<'a> {
     pub fn chunk(&self) -> &Chunk { &self.chunk }
 
     pub fn compile(&mut self) {
-        println!("size: {}", std::mem::size_of::<Value>());
-        if let Err(error) = self.start_compile() {
+        if let Err(error) = self.start_compilation() {
             self.handle_error(&error);
         }
     }
 
-    fn start_compile(&mut self) -> CompileResult {
+    fn start_compilation(&mut self) -> CompilationResult {
         self.advance()?;
-        self.expression()?;
-        self.consume(TokenType::Eof, "Expect end of expression.")
+        while self.current_token().token_type != TokenType::Eof {
+            self.declaration()?;
+        }
+        let line = self.previous_token().line;
+        self.consume(TokenType::Eof, "Expect end of expression.")?;
+        self.end_compiler(line);
+        Ok(())
     }
 
     fn end_compiler(&mut self, line: usize) {
         self.chunk.push_code(OpCode::Return, line);
     }
 
-    fn advance(&mut self) -> CompileResult {
+    fn advance(&mut self) -> CompilationResult {
         self.previous_token = self.current_token.take();
         let token = self.scanner.scan_token().map_err(CompileError::ScanError)?;
         self.current_token = Some(token);
         Ok(())
     }
 
-    fn consume(&mut self, expected_type: TokenType, error_message: &'static str) -> CompileResult {
+    fn consume(
+        &mut self,
+        expected_type: TokenType,
+        error_message: &'static str
+    ) -> CompilationResult {
         let current_token = self.current_token();
         if expected_type == current_token.token_type {
             self.advance()
@@ -72,11 +80,42 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn expression(&mut self) -> CompileResult {
+    fn advance_if_match(&mut self, token_type: TokenType) -> bool {
+        if self.current_token().token_type == token_type {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn declaration(&mut self) -> CompilationResult {
+        self.statement()
+    }
+
+    fn statement(&mut self) -> CompilationResult {
+        let current_token = self.current_token();
+        match current_token.token_type {
+            TokenType::Print => {
+                self.advance()?;
+                self.print_statement()
+            },
+            _ => CompilationResult::Err(CompileError::make_from_token(current_token, "unexpected token"))
+        }
+    }
+
+    fn print_statement(&mut self) -> CompilationResult {
+        self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after value.");
+        self.chunk.push_code(OpCode::Print, self.current_token().line);
+        Ok(())
+    }
+
+    fn expression(&mut self) -> CompilationResult {
         self.parse_precedence(Precedence::Assignment)
     }
 
-    fn parse_precedence(&mut self, precedence: Precedence) -> CompileResult {
+    fn parse_precedence(&mut self, precedence: Precedence) -> CompilationResult {
         self.advance()?;
         let token = self.previous_token();
         let rule = self.parse_rule(&token.token_type);
@@ -87,7 +126,7 @@ impl<'a> Compiler<'a> {
         let precedence_int: u8 = precedence as u8;
         loop {
             let current_rule = self.parse_rule(&self.current_token().token_type);
-            if (current_rule.precedence.clone() as u8) < precedence_int {
+            if (current_rule.precedence as u8) < precedence_int {
                 break Ok(());
             }
             self.advance()?;
@@ -100,12 +139,12 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn grouping(&mut self) -> CompileResult {
+    fn grouping(&mut self) -> CompilationResult {
         self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after expression.")
     }
 
-    fn unary(&mut self) -> CompileResult {
+    fn unary(&mut self) -> CompilationResult {
         let previous_token = self.previous_token();
         let line = previous_token.line;
         let token_type = previous_token.token_type;
@@ -118,9 +157,9 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn binary(&mut self) -> CompileResult {
+    fn binary(&mut self) -> CompilationResult {
         let previous_token = self.previous_token();
-        let token_type = previous_token.token_type.clone();
+        let token_type = previous_token.token_type;
         let token_line = previous_token.line;
         let rule = self.parse_rule(&token_type);
         let precedence = Precedence::try_from((rule.precedence as u8) + 1).unwrap();
@@ -150,7 +189,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn emit_number(&mut self) -> CompileResult {
+    fn emit_number(&mut self) -> CompilationResult {
         let number: f32 = self.previous_token().lexeme
             .as_ref()
             .expect("Only EOF token can not have a lexeme")
@@ -161,7 +200,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn literal(&mut self) -> CompileResult {
+    fn literal(&mut self) -> CompilationResult {
         let previous_token = self.previous_token();
         let line = previous_token.line;
         match previous_token.token_type {
@@ -173,7 +212,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn string(&mut self) -> CompileResult {
+    fn string(&mut self) -> CompilationResult {
         let token = self.previous_token();
         let line = token.line;
         let lexeme = token.lexeme
@@ -332,4 +371,4 @@ impl CompileError {
     }
 }
 
-pub type CompileResult = Result<(), CompileError>;
+pub type CompilationResult = Result<(), CompileError>;
