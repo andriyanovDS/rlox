@@ -1,9 +1,8 @@
 use std::alloc::{self, Layout};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
-use std::cmp::Eq;
 
-pub struct RawTable<Key: Eq, Value> {
+pub struct RawTable<Key: PartialEq, Value> {
     pub pointer: NonNull<Entry<Key, Value>>,
     pub capacity: usize,
     _marker: PhantomData<Entry<Key, Value>>
@@ -20,7 +19,7 @@ pub enum EntryType<Key> {
 }
 
 impl<Key> EntryType<Key> {
-    fn filled(&self) -> Option<&Key> {
+    pub fn filled(&self) -> Option<&Key> {
         match self {
             EntryType::Filled(key) => Some(key),
             _ => None,
@@ -28,12 +27,12 @@ impl<Key> EntryType<Key> {
     }
 }
 
-pub struct Entry<Key: Eq, Value> {
+pub struct Entry<Key: PartialEq, Value> {
     pub entry_type: EntryType<Key>,
     pub value: Value,
 }
 
-impl<Key: Eq, Value> Entry<Key, Value> {
+impl<Key: PartialEq, Value> Entry<Key, Value> {
     pub fn new(key: Key, value: Value) -> Self {
         Self {
             entry_type: EntryType::Filled(key),
@@ -48,7 +47,7 @@ impl<Key: Eq, Value> Entry<Key, Value> {
     }
 }
 
-impl<Key: Hashable + Eq, Value: Default> RawTable<Key, Value> {
+impl<Key: Hashable + PartialEq, Value: Default> RawTable<Key, Value> {
     pub fn new() -> Self {
         RawTable {
             pointer: NonNull::dangling(),
@@ -116,7 +115,7 @@ impl<Key: Hashable + Eq, Value: Default> RawTable<Key, Value> {
     }
 }
 
-impl<Key: Eq, Value> Drop for RawTable<Key, Value> {
+impl<Key: PartialEq, Value> Drop for RawTable<Key, Value> {
     fn drop(&mut self) {
         if self.capacity != 0 {
             let layout = Layout::array::<Entry<Key, Value>>(self.capacity).unwrap();
@@ -133,7 +132,7 @@ impl<Key> Default for EntryType<Key> {
     }
 }
 
-impl<Key: Eq, Value: Default> Default for Entry<Key, Value> {
+impl<Key: PartialEq, Value: Default> Default for Entry<Key, Value> {
     fn default() -> Self {
         Self {
             entry_type: EntryType::Empty,

@@ -1,16 +1,24 @@
+use std::cell::RefCell;
 use super::value::Value;
 use super::stack::Stack;
 use super::op_code::OpCode;
 use super::chunk::Chunk;
+use super::hash_table::HashTable;
+use super::object_string::ObjectString;
 use std::ops::{Sub, Mul, Div};
+use std::rc::Rc;
 
 pub struct VirtualMachine {
-    stack: Stack
+    stack: Stack,
+    interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>
 }
 
 impl VirtualMachine {
-    pub fn new() -> Self {
-        Self { stack: Stack::new() }
+    pub fn new(interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>) -> Self {
+         Self {
+            stack: Stack::new(),
+             interned_strings,
+        }
     }
 
     pub fn interpret(&mut self, chunk: &Chunk) -> InterpretResult {
@@ -79,8 +87,11 @@ impl VirtualMachine {
                 self.stack.push(Value::Number(left + right));
                 Ok(())
             }
-            (Value::String { value: right, hash: _ }, Value::String { value: left, hash: _ }) => {
-                self.stack.push(Value::make_string_value(left + right.as_str()));
+            (Value::String(right), Value::String(left)) => {
+                let string = left.as_ref().value.clone() + right.as_ref().value.as_str();
+                let mut strings = self.interned_strings.as_ref().borrow_mut();
+                let object = strings.find_string_or_insert_new(string);
+                self.stack.push(Value::String(object));
                 Ok(())
             }
             _ => {

@@ -1,3 +1,7 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+use super::hash_table::HashTable;
+use super::object_string::ObjectString;
 use super::token::Lexeme;
 use super::chunk::Chunk;
 use super::op_code::OpCode;
@@ -9,6 +13,7 @@ use super::parse_rule::{ParseType, Precedence, ParseRule};
 
 pub struct Compiler<'a> {
     scanner: Scanner<'a>,
+    interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
     source: &'a str,
     chunk: Chunk,
     parse_rules: [ParseRule<'a>; 39],
@@ -17,9 +22,13 @@ pub struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
-    pub fn new(source: &'a str) -> Self {
+    pub fn new(
+        source: &'a str,
+        interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>
+    ) -> Self {
         Self {
-            scanner: Scanner::new(&source),
+            scanner: Scanner::new(source),
+            interned_strings,
             source,
             chunk: Chunk::new(),
             parse_rules: Compiler::make_parse_rules(),
@@ -172,7 +181,9 @@ impl<'a> Compiler<'a> {
             .unwrap()
             .make_slice(self.source)
             .to_string();
-        self.chunk.add_constant(Value::make_string_value(lexeme), line);
+        let mut strings = self.interned_strings.as_ref().borrow_mut();
+        let object = strings.find_string_or_insert_new(lexeme);
+        self.chunk.add_constant(Value::String(object), line);
         Ok(())
     }
 

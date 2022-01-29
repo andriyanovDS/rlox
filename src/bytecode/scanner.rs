@@ -221,7 +221,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn identifier_type(&self, keyword: &'a str) -> TokenType {
-        assert_eq!(keyword.is_empty(), false);
+        assert!(!keyword.is_empty());
         let mut chars = keyword.chars();
         match chars.next().unwrap() {
             'a' => Scanner::check_keyword(&keyword[1..], "nd", TokenType::And),

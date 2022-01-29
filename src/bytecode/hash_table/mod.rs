@@ -1,17 +1,15 @@
 mod raw_table;
 
-use raw_table::{RawTable, Hashable, Entry, EntryType};
-use std::cmp::Eq;
-use std::collections::HashMap;
+use raw_table::{RawTable, Entry, EntryType};
+use std::cmp::PartialEq;
+pub use raw_table::Hashable;
 
-const TABLE_MAX_LOAD: f32 = 0.75;
-
-pub struct HashTable<Key: Hashable + Eq, Value> {
+pub struct HashTable<Key: Hashable + PartialEq, Value> {
     length: usize,
     buffer: RawTable<Key, Value>,
 }
 
-impl<Key: Hashable + Eq, Value: Default> HashTable<Key, Value> {
+impl<Key: Hashable + PartialEq, Value: Default> HashTable<Key, Value> {
     pub fn new() -> Self {
         Self {
             length: 0,
@@ -57,28 +55,9 @@ impl<Key: Hashable + Eq, Value: Default> HashTable<Key, Value> {
     }
 
     pub fn find(&self, key: &Key) -> Option<&Value> {
-        if self.length == 0 {
-            return None;
-        }
-        let mut index = self.make_index(key.hash());
-        let initial_index = index;
-        loop {
-            unsafe {
-                let entry = self.pointer().add(index).as_ref().unwrap();
-                match &entry.entry_type {
-                    EntryType::Empty => { break None; }
-                    EntryType::Filled(entry_key) if entry_key == key => {
-                        break Some(&entry.value);
-                    }
-                    _ => {
-                        index = self.make_index(index + 1);
-                    }
-                }
-                if index == initial_index {
-                    break None;
-                }
-            };
-        }
+        self
+            .find_entry(key.hash(), |entry_key| entry_key == key)
+            .map(|entry| &entry.value)
     }
 
     pub fn remove(&mut self, key: &Key) -> Option<Value> {
@@ -119,6 +98,36 @@ impl<Key: Hashable + Eq, Value: Default> HashTable<Key, Value> {
     }
 
     #[inline]
+    pub fn find_entry<F>(
+        &self,
+        hash: usize,
+        is_searched_key: F
+    ) -> Option<&Entry<Key, Value>> where F: Fn(&Key) -> bool {
+        if self.length == 0 {
+            return None;
+        }
+        let mut index = self.make_index(hash);
+        let initial_index = index;
+        loop {
+            unsafe {
+                let entry = self.pointer().add(index).as_ref().unwrap();
+                match &entry.entry_type {
+                    EntryType::Empty => { break None; }
+                    EntryType::Filled(entry_key) if is_searched_key(entry_key) => {
+                        break Some(entry);
+                    }
+                    _ => {
+                        index = self.make_index(index + 1);
+                    }
+                }
+                if index == initial_index {
+                    break None;
+                }
+            };
+        }
+    }
+
+    #[inline]
     fn make_index(&self, from_index: usize) -> usize {
         from_index % self.buffer.capacity
     }
@@ -136,6 +145,7 @@ impl<Key: Hashable + Eq, Value: Default> HashTable<Key, Value> {
 
 #[cfg(test)]
 mod tests {
+    use crate::bytecode::object_string::ObjectString;
     use crate::bytecode::value::Value;
     use super::*;
 
@@ -143,7 +153,7 @@ mod tests {
     fn insertion() {
         let mut hash_map = HashTable::<String, Value>::new();
         hash_map.insert("some_key".to_string(), Value::Bool(true));
-        assert_eq!(hash_map.contains(&"some_key".to_string()), true)
+        assert!(hash_map.contains(&"some_key".to_string()))
     }
 
     #[test]
@@ -162,9 +172,9 @@ mod tests {
         hash_map.insert(first_key.clone(), Value::Bool(true));
         hash_map.insert(second_key.clone(), Value::Number(1f32));
         hash_map.insert("other_key_3".to_string(), Value::Number(1f32));
-        assert_eq!(hash_map.contains(&first_key), true);
-        assert_eq!(hash_map.contains(&second_key), true);
-        assert_eq!(hash_map.contains(&"not_inserted_key".to_string()), false);
+        assert!(hash_map.contains(&first_key));
+        assert!(hash_map.contains(&second_key));
+        assert!(!hash_map.contains(&"not_inserted_key".to_string()));
     }
 
     #[test]
@@ -179,12 +189,12 @@ mod tests {
         hash_map.insert(second_key.clone(), second_value.clone());
 
         let first_removed = hash_map.remove(&first_key);
-        assert_eq!(hash_map.contains(&second_key), true);
+        assert!(hash_map.contains(&second_key));
 
         let second_removed = hash_map.remove(&second_key);
 
-        assert_eq!(hash_map.contains(&first_key), false);
-        assert_eq!(hash_map.contains(&second_key), false);
+        assert!(!hash_map.contains(&first_key));
+        assert!(!hash_map.contains(&second_key));
         assert_eq!(first_removed.unwrap(), first_value);
         assert_eq!(second_removed.unwrap(), second_value);
     }
@@ -200,15 +210,14 @@ mod tests {
         hash_map.insert(second_key.clone(), Value::Number(1f32));
         hash_map.clone_all(&mut clone_map);
 
-        assert_eq!(clone_map.contains(&first_key), true);
-        assert_eq!(clone_map.contains(&second_key), true);
-        assert_eq!(hash_map.contains(&first_key), true);
-        assert_eq!(hash_map.contains(&second_key), true);
+        assert!(clone_map.contains(&second_key));
+        assert!(hash_map.contains(&first_key));
+        assert!(hash_map.contains(&second_key));
     }
 
     impl Hashable for String {
         fn hash(&self) -> usize {
-            Value::hash_string(self)
+            ObjectString::hash_string(self)
         }
     }
 }
