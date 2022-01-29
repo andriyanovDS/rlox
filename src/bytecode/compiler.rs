@@ -80,15 +80,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn advance_if_match(&mut self, token_type: TokenType) -> bool {
-        if self.current_token().token_type == token_type {
-            self.advance();
-            true
-        } else {
-            false
-        }
-    }
-
+    #[inline]
     fn declaration(&mut self) -> CompilationResult {
         self.statement()
     }
@@ -104,13 +96,23 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    #[inline]
     fn print_statement(&mut self) -> CompilationResult {
         self.expression()?;
-        self.consume(TokenType::Semicolon, "Expect ';' after value.");
-        self.chunk.push_code(OpCode::Print, self.current_token().line);
+        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
+        self.push_code(OpCode::Print);
         Ok(())
     }
 
+    #[inline]
+    fn expression_statement(&mut self) -> CompilationResult {
+        self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
+        self.push_code(OpCode::Pop);
+        Ok(())
+    }
+
+    #[inline]
     fn expression(&mut self) -> CompilationResult {
         self.parse_precedence(Precedence::Assignment)
     }
@@ -139,6 +141,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    #[inline]
     fn grouping(&mut self) -> CompilationResult {
         self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after expression.")
@@ -226,14 +229,22 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    #[inline]
     fn parse_rule(&self, token_type: &TokenType) -> &ParseRule<'a> {
         &self.parse_rules[*token_type as usize]
     }
 
+    #[inline]
+    fn push_code(&mut self, code: OpCode) {
+        self.chunk.push_code(code, self.current_token().line);
+    }
+
+    #[inline]
     fn current_token(&self) -> &Token {
         self.current_token.as_ref().unwrap()
     }
 
+    #[inline]
     fn previous_token(&self) -> &Token {
         self.previous_token.as_ref().unwrap()
     }

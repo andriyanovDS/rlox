@@ -29,12 +29,7 @@ impl VirtualMachine {
                 let op_code = Chunk::byte_to_op_code(*code);
                 offset += op_code.code_size();
                 match op_code {
-                    OpCode::Return => {
-                        if let Some(value) = self.stack.pop() {
-                            println!("{:?}", value);
-                        }
-                        break Ok(());
-                    },
+                    OpCode::Return => { break Ok(()); },
                     OpCode::Constant => {
                         let constant = chunk.read_constant(&mut iter);
                         self.stack.push(constant.clone());
@@ -55,7 +50,8 @@ impl VirtualMachine {
                     OpCode::Equal => self.apply_equal_operation(),
                     OpCode::Greater => self.apply_compare_operation(|a, b| a > b, offset, chunk)?,
                     OpCode::Less => self.apply_compare_operation(|a, b| a < b, offset, chunk)?,
-                    OpCode::Print => println!("{:?}", self.stack.pop().unwrap())
+                    OpCode::Print => println!("{:?}", self.stack.pop().unwrap()),
+                    OpCode::Pop => { self.stack.pop(); }
                 }
             } else {
                 self.stack.print_debug_info();
