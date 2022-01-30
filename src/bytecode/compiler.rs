@@ -112,7 +112,7 @@ impl<'a> Compiler<'a> {
             self.chunk.push_code(OpCode::Nil, line);
         }
         self.consume(TokenType::Semicolon, "Expect ';' after variable declaration.")?;
-        self.chunk.add_global_variable(global, line);
+        self.chunk.define_global_variable(global, line);
         Ok(())
     }
 
@@ -251,6 +251,12 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    fn variable(&mut self) -> CompilationResult {
+        let object = self.intern_string();
+        self.chunk.get_global_variable(object, self.previous_token().line);
+        Ok(())
+    }
+
     #[inline]
     fn intern_string(&mut self) -> Rc<ObjectString> {
         let token = self.previous_token();
@@ -377,7 +383,10 @@ impl<'a> Compiler<'a> {
                 parse_type: ParseType::Infix(Compiler::binary),
                 precedence: Precedence:: Comparison
             }, // TokenType::LessEqual
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Identifier
+            ParseRule {
+                parse_type: ParseType::Prefix(Compiler::variable),
+                precedence: Precedence::None
+            }, // TokenType::Identifier
             ParseRule {
                 parse_type: ParseType::Prefix(Compiler::string),
                 precedence: Precedence::None

@@ -55,7 +55,8 @@ impl VirtualMachine {
                     OpCode::Less => self.apply_compare_operation(|a, b| a < b, offset, chunk)?,
                     OpCode::Print => println!("{:?}", self.stack.pop().unwrap()),
                     OpCode::Pop => { self.stack.pop(); },
-                    OpCode::DefineGlobal => self.define_global_variable(chunk, &mut iter)
+                    OpCode::DefineGlobal => self.define_global_variable(chunk, &mut iter),
+                    OpCode::GetGlobal => self.get_global_variable(chunk, &mut iter, offset)?,
                 }
             } else {
                 self.stack.print_debug_info();
@@ -156,6 +157,25 @@ impl VirtualMachine {
         if let Value::String(object) = value {
             let value = self.stack.pop().unwrap();
             self.globals.insert(Rc::clone(object), value);
+        } else {
+            panic!("Unexpected value type in global variable");
+        }
+    }
+
+    #[inline]
+    fn get_global_variable(&mut self, chunk: &Chunk, iter: &mut Iter<u8>, offset: usize) -> InterpretResult {
+        if let Value::String(object) = chunk.read_constant(iter) {
+            match self.globals.find(object) {
+                Some(variable) => {
+                    self.stack.push(variable.clone());
+                    Ok(())
+                }
+                None => {
+                    let variable = &object.as_ref().value;
+                    self.runtime_error(format!("Undefined variable {:?}", variable), offset, chunk);
+                    Err(InterpretError::RuntimeError)
+                }
+            }
         } else {
             panic!("Unexpected value type in global variable");
         }

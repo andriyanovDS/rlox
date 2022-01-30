@@ -49,16 +49,28 @@ impl Chunk {
 
     pub fn add_constant(&mut self, constant: Value, line: usize) {
         println!("add constant {:?}", &constant);
-        self.constants.push(constant);
-        let index = self.constants.length() - 1;
+        let index = self.push_constant_to_pool(constant);
         self.push_constant(index, line);
     }
 
-    pub fn add_global_variable(&mut self, constant: Rc<ObjectString>, line: usize) {
+    pub fn define_global_variable(&mut self, constant: Rc<ObjectString>, line: usize) {
         println!("add global variable {:?}", &constant);
-        self.constants.push(Value::String(constant));
+        let index = self.push_constant_to_pool(Value::String(constant));
         self.push_code(OpCode::DefineGlobal, line);
-        self.push((self.constants.length() - 1) as u8, line);
+        self.push(index as u8, line);
+    }
+
+    pub fn get_global_variable(&mut self, constant: Rc<ObjectString>, line: usize) {
+        println!("get global variable {:?}", &constant);
+        let index = self.push_constant_to_pool(Value::String(constant));
+        self.push_code(OpCode::GetGlobal, line);
+        self.push(index as u8, line);
+    }
+
+    #[inline]
+    fn push_constant_to_pool(&mut self, constant: Value) -> usize {
+        self.constants.push(constant);
+        self.constants.length() - 1
     }
 
     pub fn disassemble_instruction(&self, op_code: &OpCode, iter: &mut Iter<u8>, offset: usize) -> usize {
@@ -71,7 +83,7 @@ impl Chunk {
             | OpCode::Less | OpCode::Print | OpCode::Pop => {
                 println!("{} {} at {}", offset, op_code, line);
             }
-            OpCode::Constant | OpCode::DefineGlobal => {
+            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal => {
                 let value = self.read_constant(iter);
                 println!("{} {} {:?} at {}", offset, op_code, value, line);
             }
