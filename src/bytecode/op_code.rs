@@ -21,6 +21,7 @@ pub enum OpCode {
     Pop,
     DefineGlobal,
     GetGlobal,
+    SetGlobal,
 }
 
 impl OpCode {
@@ -57,6 +58,7 @@ impl Display for OpCode {
             OpCode::Pop => write!(f, "OP_POP"),
             OpCode::DefineGlobal => write!(f, "OP_DEFINE_GLOBAL"),
             OpCode::GetGlobal => write!(f, "OP_GET_GLOBAL"),
+            OpCode::SetGlobal => write!(f, "OP_SET_GLOBAL"),
         }
     }
 }

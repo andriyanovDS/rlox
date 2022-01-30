@@ -68,7 +68,7 @@ impl Chunk {
     }
 
     #[inline]
-    fn push_constant_to_pool(&mut self, constant: Value) -> usize {
+    pub fn push_constant_to_pool(&mut self, constant: Value) -> usize {
         self.constants.push(constant);
         self.constants.length() - 1
     }
@@ -83,7 +83,7 @@ impl Chunk {
             | OpCode::Less | OpCode::Print | OpCode::Pop => {
                 println!("{} {} at {}", offset, op_code, line);
             }
-            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal => {
+            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal => {
                 let value = self.read_constant(iter);
                 println!("{} {} {:?} at {}", offset, op_code, value, line);
             }
@@ -124,7 +124,7 @@ impl Chunk {
         }
     }
 
-    fn push(&mut self, byte: u8, line: usize) {
+    pub fn push(&mut self, byte: u8, line: usize) {
         self.codes.push(byte);
         match self.lines.last() {
             None => self.lines.push(LineStart { offset: 0, line }),

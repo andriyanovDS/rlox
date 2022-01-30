@@ -95,9 +95,11 @@ impl<'a> Compiler<'a> {
 
     fn statement(&mut self) -> CompilationResult {
         let current_token_type = self.current_token().token_type;
-        self.advance()?;
         match current_token_type {
-            TokenType::Print => self.print_statement(),
+            TokenType::Print => {
+                self.advance()?;
+                self.print_statement()
+            },
             _ => self.expression_statement()
         }
     }
@@ -151,15 +153,17 @@ impl<'a> Compiler<'a> {
         self.advance()?;
         let token = self.previous_token();
         let rule = self.parse_rule(&token.token_type);
+
+        let can_assign = precedence <= Precedence::Assignment;
         match rule.parse_type.prefix() {
-            Some(func) => func(self),
+            Some(func) => func(self, can_assign),
             None => Err(CompileError::make_from_token(token, "Expect expression."))
         }?;
         let precedence_int: u8 = precedence as u8;
         loop {
             let current_rule = self.parse_rule(&self.current_token().token_type);
             if (current_rule.precedence as u8) < precedence_int {
-                break Ok(());
+                break;
             }
             self.advance()?;
             let token = self.previous_token();
@@ -168,16 +172,22 @@ impl<'a> Compiler<'a> {
                 Some(func) => func(self),
                 None => Err(CompileError::make_from_token(token, "Expect expression."))
             }?;
+        };
+        if can_assign && self.current_token().token_type == TokenType::Equal {
+            self.advance()?;
+            Err(CompileError::make_from_token(self.previous_token(), "Invalid assignment target."))
+        } else {
+            Ok(())
         }
     }
 
     #[inline]
-    fn grouping(&mut self) -> CompilationResult {
+    fn grouping(&mut self, _can_assign: bool) -> CompilationResult {
         self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after expression.")
     }
 
-    fn unary(&mut self) -> CompilationResult {
+    fn unary(&mut self, _can_assign: bool) -> CompilationResult {
         let previous_token = self.previous_token();
         let line = previous_token.line;
         let token_type = previous_token.token_type;
@@ -222,7 +232,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn emit_number(&mut self) -> CompilationResult {
+    fn emit_number(&mut self, _can_assign: bool) -> CompilationResult {
         let number: f32 = self.previous_token().lexeme
             .as_ref()
             .expect("Only EOF token can not have a lexeme")
@@ -233,7 +243,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn literal(&mut self) -> CompilationResult {
+    fn literal(&mut self, _can_assign: bool) -> CompilationResult {
         let previous_token = self.previous_token();
         let line = previous_token.line;
         match previous_token.token_type {
@@ -245,15 +255,26 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn string(&mut self) -> CompilationResult {
+    fn string(&mut self, _can_assign: bool) -> CompilationResult {
         let object = self.intern_string();
         self.chunk.add_constant(Value::String(object), self.previous_token().line);
         Ok(())
     }
 
-    fn variable(&mut self) -> CompilationResult {
+    fn variable(&mut self, can_assign: bool) -> CompilationResult {
         let object = self.intern_string();
-        self.chunk.get_global_variable(object, self.previous_token().line);
+        let index = self.chunk.push_constant_to_pool(Value::String(object)) as u8;
+        if can_assign && self.current_token().token_type == TokenType::Equal {
+            self.advance()?;
+            self.expression()?;
+            let line = self.previous_token().line;
+            self.chunk.push_code(OpCode::SetGlobal, line);
+            self.chunk.push(index, line);
+        } else {
+            let line = self.previous_token().line;
+            self.chunk.push_code(OpCode::GetGlobal, line);
+            self.chunk.push(index, line);
+        }
         Ok(())
     }
 

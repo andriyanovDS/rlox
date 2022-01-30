@@ -1,5 +1,6 @@
 use super::compiler::{Compiler, CompilationResult};
 use std::convert::TryFrom;
+use std::cmp::{Ordering, PartialOrd, PartialEq};
 
 #[derive(Copy, Clone, Debug)]
 pub enum Precedence {
@@ -14,6 +15,20 @@ pub enum Precedence {
     Unary,
     Call,
     Primary,
+}
+
+impl PartialOrd for Precedence {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let left = *self as u8;
+        let right = *other as u8;
+        Some(left.cmp(&right))
+    }
+}
+
+impl PartialEq for Precedence {
+    fn eq(&self, other: &Self) -> bool {
+        (*self as u8) == (*other as u8)
+    }
 }
 
 impl TryFrom<u8> for Precedence {
@@ -37,20 +52,21 @@ impl TryFrom<u8> for Precedence {
     }
 }
 
-type ParseFn<'a> = fn(&mut Compiler<'a>) -> CompilationResult;
+type InfixFn<'a> = fn(&mut Compiler<'a>) -> CompilationResult;
+type PrefixFn<'a> = fn(&mut Compiler<'a>, can_assign: bool) -> CompilationResult;
 
 pub enum ParseType<'a> {
-    Prefix(ParseFn<'a>),
-    Infix(ParseFn<'a>),
+    Prefix(PrefixFn<'a>),
+    Infix(InfixFn<'a>),
     Both {
-        prefix: ParseFn<'a>,
-        infix: ParseFn<'a>,
+        prefix: PrefixFn<'a>,
+        infix: InfixFn<'a>,
     },
     None,
 }
 
 impl<'a> ParseType<'a> {
-    pub fn prefix(&self) -> Option<&ParseFn<'a>> {
+    pub fn prefix(&self) -> Option<&PrefixFn<'a>> {
         match self {
             ParseType::Prefix(func) => Some(func),
             ParseType::Both { prefix, infix: _ } => Some(prefix),
@@ -58,7 +74,7 @@ impl<'a> ParseType<'a> {
         }
     }
 
-    pub fn infix(&self) -> Option<&ParseFn<'a>> {
+    pub fn infix(&self) -> Option<&InfixFn<'a>> {
         match self {
             ParseType::Infix(func) => Some(func),
             ParseType::Both { prefix: _, infix } => Some(infix),

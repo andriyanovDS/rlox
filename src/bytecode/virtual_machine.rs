@@ -57,6 +57,7 @@ impl VirtualMachine {
                     OpCode::Pop => { self.stack.pop(); },
                     OpCode::DefineGlobal => self.define_global_variable(chunk, &mut iter),
                     OpCode::GetGlobal => self.get_global_variable(chunk, &mut iter, offset)?,
+                    OpCode::SetGlobal => self.set_global_variable(chunk, &mut iter, offset)?,
                 }
             } else {
                 self.stack.print_debug_info();
@@ -163,7 +164,12 @@ impl VirtualMachine {
     }
 
     #[inline]
-    fn get_global_variable(&mut self, chunk: &Chunk, iter: &mut Iter<u8>, offset: usize) -> InterpretResult {
+    fn get_global_variable(
+        &mut self,
+        chunk: &Chunk,
+        iter: &mut Iter<u8>,
+        offset: usize
+    ) -> InterpretResult {
         if let Value::String(object) = chunk.read_constant(iter) {
             match self.globals.find(object) {
                 Some(variable) => {
@@ -181,9 +187,30 @@ impl VirtualMachine {
         }
     }
 
+    #[inline]
+    fn set_global_variable(
+        &mut self,
+        chunk: &Chunk,
+        iter: &mut Iter<u8>,
+        offset: usize
+    ) -> InterpretResult {
+        if let Value::String(object) = chunk.read_constant(iter) {
+            if !self.globals.contains(object) {
+                let variable = &object.as_ref().value;
+                self.runtime_error(format!("Undefined variable {:?}", variable), offset, chunk);
+                Err(InterpretError::RuntimeError)
+            } else {
+                let value = self.stack.peek_end(0).unwrap();
+                self.globals.insert(Rc::clone(object), value.clone());
+                Ok(())
+            }
+        } else {
+            panic!("Unexpected value type in global variable");
+        }
+    }
+
     fn runtime_error(&mut self, message: String, offset: usize, chunk: &Chunk) {
-        eprintln!("{}", message);
-        eprintln!("[line {}] in script.", chunk.line(offset));
+        eprintln!("[line {}] in script. {}", chunk.line(offset), message);
     }
 }
 
