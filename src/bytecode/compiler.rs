@@ -85,7 +85,12 @@ impl<'a> Compiler<'a> {
 
     #[inline]
     fn declaration(&mut self) -> CompilationResult {
-        self.statement()
+        if self.current_token().token_type == TokenType::Var {
+            self.advance()?;
+            self.variable_declaration()
+        } else {
+            self.statement()
+        }
     }
 
     fn statement(&mut self) -> CompilationResult {
@@ -94,6 +99,30 @@ impl<'a> Compiler<'a> {
         match current_token_type {
             TokenType::Print => self.print_statement(),
             _ => self.expression_statement()
+        }
+    }
+
+    fn variable_declaration(&mut self) -> CompilationResult {
+        let global = self.parse_variable("Expect variable name.")?;
+        let line = self.previous_token().line;
+        if self.current_token().token_type == TokenType::Equal {
+            self.advance()?;
+            self.expression()?;
+        } else {
+            self.chunk.push_code(OpCode::Nil, line);
+        }
+        self.consume(TokenType::Semicolon, "Expect ';' after variable declaration.")?;
+        self.chunk.add_global_variable(global, line);
+        Ok(())
+    }
+
+    #[inline]
+    fn parse_variable(&mut self, error_message: &'static str) -> Result<Rc<ObjectString>, CompileError> {
+        if self.current_token().token_type == TokenType::Identifier {
+            self.advance()?;
+            Ok(self.intern_string())
+        } else {
+            Err(CompileError::make_from_token(self.current_token(), error_message))
         }
     }
 
@@ -217,17 +246,21 @@ impl<'a> Compiler<'a> {
     }
 
     fn string(&mut self) -> CompilationResult {
+        let object = self.intern_string();
+        self.chunk.add_constant(Value::String(object), self.previous_token().line);
+        Ok(())
+    }
+
+    #[inline]
+    fn intern_string(&mut self) -> Rc<ObjectString> {
         let token = self.previous_token();
-        let line = token.line;
         let lexeme = token.lexeme
             .as_ref()
             .unwrap()
             .make_slice(self.source)
             .to_string();
         let mut strings = self.interned_strings.as_ref().borrow_mut();
-        let object = strings.find_string_or_insert_new(lexeme);
-        self.chunk.add_constant(Value::String(object), line);
-        Ok(())
+        strings.find_string_or_insert_new(lexeme)
     }
 
     #[inline]

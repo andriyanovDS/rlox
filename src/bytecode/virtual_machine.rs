@@ -7,10 +7,12 @@ use super::hash_table::HashTable;
 use super::object_string::ObjectString;
 use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
+use std::slice::Iter;
 
 pub struct VirtualMachine {
     stack: Stack,
-    interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>
+    interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
+    globals: HashTable<Rc<ObjectString>, Value>,
 }
 
 impl VirtualMachine {
@@ -18,6 +20,7 @@ impl VirtualMachine {
          Self {
             stack: Stack::new(),
              interned_strings,
+             globals: HashTable::new(),
         }
     }
 
@@ -51,7 +54,8 @@ impl VirtualMachine {
                     OpCode::Greater => self.apply_compare_operation(|a, b| a > b, offset, chunk)?,
                     OpCode::Less => self.apply_compare_operation(|a, b| a < b, offset, chunk)?,
                     OpCode::Print => println!("{:?}", self.stack.pop().unwrap()),
-                    OpCode::Pop => { self.stack.pop(); }
+                    OpCode::Pop => { self.stack.pop(); },
+                    OpCode::DefineGlobal => self.define_global_variable(chunk, &mut iter)
                 }
             } else {
                 self.stack.print_debug_info();
@@ -144,6 +148,17 @@ impl VirtualMachine {
         let left = self.stack.pop().unwrap();
         let right = self.stack.pop().unwrap();
         self.stack.push(Value::Bool(left == right));
+    }
+
+    #[inline]
+    fn define_global_variable(&mut self, chunk: &Chunk, iter: &mut Iter<u8>) {
+        let value = chunk.read_constant(iter);
+        if let Value::String(object) = value {
+            let value = self.stack.pop().unwrap();
+            self.globals.insert(Rc::clone(object), value);
+        } else {
+            panic!("Unexpected value type in global variable");
+        }
     }
 
     fn runtime_error(&mut self, message: String, offset: usize, chunk: &Chunk) {

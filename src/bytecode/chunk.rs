@@ -2,12 +2,14 @@ use super::value::Value;
 use super::vec::Vec;
 use super::op_code::OpCode;
 use super::constant_pool::ConstantPool;
+use super::object_string::ObjectString;
 use std::mem;
+use std::rc::Rc;
 use std::slice::Iter;
 
 pub struct Chunk {
     pub codes: Vec<u8>,
-    pub constants: ConstantPool,
+    constants: ConstantPool,
     lines: Vec<LineStart>,
 }
 
@@ -52,6 +54,13 @@ impl Chunk {
         self.push_constant(index, line);
     }
 
+    pub fn add_global_variable(&mut self, constant: Rc<ObjectString>, line: usize) {
+        println!("add global variable {:?}", &constant);
+        self.constants.push(Value::String(constant));
+        self.push_code(OpCode::DefineGlobal, line);
+        self.push((self.constants.length() - 1) as u8, line);
+    }
+
     pub fn disassemble_instruction(&self, op_code: &OpCode, iter: &mut Iter<u8>, offset: usize) -> usize {
         let line = self.line(offset);
         match op_code {
@@ -62,7 +71,7 @@ impl Chunk {
             | OpCode::Less | OpCode::Print | OpCode::Pop => {
                 println!("{} {} at {}", offset, op_code, line);
             }
-            OpCode::Constant => {
+            OpCode::Constant | OpCode::DefineGlobal => {
                 let value = self.read_constant(iter);
                 println!("{} {} {:?} at {}", offset, op_code, value, line);
             }
