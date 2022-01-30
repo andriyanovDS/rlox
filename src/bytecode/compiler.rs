@@ -48,7 +48,10 @@ impl<'a> Compiler<'a> {
     fn start_compilation(&mut self) -> CompilationResult {
         self.advance()?;
         while self.current_token().token_type != TokenType::Eof {
-            self.declaration()?;
+            if let Err(error) = self.declaration() {
+                self.handle_error(&error);
+                self.synchronize();
+            }
         }
         let line = self.previous_token().line;
         self.consume(TokenType::Eof, "Expect end of expression.")?;
@@ -86,13 +89,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn statement(&mut self) -> CompilationResult {
-        let current_token = self.current_token();
-        match current_token.token_type {
-            TokenType::Print => {
-                self.advance()?;
-                self.print_statement()
-            },
-            _ => CompilationResult::Err(CompileError::make_from_token(current_token, "unexpected token"))
+        let current_token_type = self.current_token().token_type;
+        self.advance()?;
+        match current_token_type {
+            TokenType::Print => self.print_statement(),
+            _ => self.expression_statement()
         }
     }
 
@@ -237,6 +238,25 @@ impl<'a> Compiler<'a> {
     #[inline]
     fn push_code(&mut self, code: OpCode) {
         self.chunk.push_code(code, self.current_token().line);
+    }
+
+    fn synchronize(&mut self) {
+        loop {
+            let current_token_type = self.current_token().token_type;
+            match current_token_type {
+                TokenType::Eof | TokenType::Class | TokenType::For
+                | TokenType::Fun | TokenType::Var | TokenType::If
+                | TokenType::Print | TokenType::Return => {
+                    return;
+                }
+                _ if self.previous_token().token_type == TokenType::Semicolon => {
+                    return;
+                }
+                _ => {
+                    let _ = self.advance();
+                }
+            }
+        }
     }
 
     #[inline]
