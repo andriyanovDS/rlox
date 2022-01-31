@@ -39,13 +39,3 @@ impl Debug for Value {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test() {
-        assert_eq!(ObjectString::hash_string("feedface"), 0x0a83c86fee952abc);
-    }
-}
