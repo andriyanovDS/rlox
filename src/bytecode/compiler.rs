@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use super::scope::Scope;
 use super::hash_table::HashTable;
 use super::object_string::ObjectString;
 use super::token::Lexeme;
@@ -15,6 +16,7 @@ pub struct Compiler<'a> {
     scanner: Scanner<'a>,
     interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
     string_constants: HashTable<Rc<ObjectString>, u8>,
+    scope: Scope,
     source: &'a str,
     chunk: Chunk,
     parse_rules: [ParseRule<'a>; 39],
@@ -31,6 +33,7 @@ impl<'a> Compiler<'a> {
             scanner: Scanner::new(source),
             interned_strings,
             string_constants: HashTable::new(),
+            scope: Scope::new(),
             source,
             chunk: Chunk::new(),
             parse_rules: Compiler::make_parse_rules(),
@@ -102,12 +105,20 @@ impl<'a> Compiler<'a> {
                 self.advance()?;
                 self.print_statement()
             },
+            TokenType::LeftBrace => self.parse_block(),
             _ => self.expression_statement()
         }
     }
 
     fn variable_declaration(&mut self) -> CompilationResult {
-        let global = self.parse_variable("Expect variable name.")?;
+        self.parse_variable("Expect variable name.")?;
+        let index = if self.scope.is_global_scope() {
+            let object = self.intern_string();
+            self.chunk.push_constant_to_pool(Value::String(object))
+        } else {
+            self.declare_local_variable()?;
+            0
+        };
         let line = self.previous_token().line;
         if self.current_token().token_type == TokenType::Equal {
             self.advance()?;
@@ -116,15 +127,28 @@ impl<'a> Compiler<'a> {
             self.chunk.push_code(OpCode::Nil, line);
         }
         self.consume(TokenType::Semicolon, "Expect ';' after variable declaration.")?;
-        self.chunk.define_global_variable(global, line);
+        if self.scope.is_global_scope() {
+            self.chunk.push_code(OpCode::DefineGlobal, line);
+            self.chunk.push(index as u8, line);
+        }
         Ok(())
     }
 
+    fn declare_local_variable(&mut self) -> CompilationResult {
+        assert!(!self.scope.is_global_scope());
+        let token = self.previous_token().clone();
+        if self.scope.is_redeclaration(&token, self.source) {
+            Err(CompileError::make_from_token(&token, "Already a variable with this name in this scope."))
+        } else {
+            self.scope.add_local(token)
+        }
+    }
+
     #[inline]
-    fn parse_variable(&mut self, error_message: &'static str) -> Result<Rc<ObjectString>, CompileError> {
+    fn parse_variable(&mut self, error_message: &'static str) -> CompilationResult {
         if self.current_token().token_type == TokenType::Identifier {
             self.advance()?;
-            Ok(self.intern_string())
+            Ok(())
         } else {
             Err(CompileError::make_from_token(self.current_token(), error_message))
         }
@@ -136,6 +160,36 @@ impl<'a> Compiler<'a> {
         self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
         self.push_code(OpCode::Print);
         Ok(())
+    }
+
+    fn parse_block(&mut self) -> CompilationResult {
+        self.advance()?;
+        self.scope.begin_scope();
+        let result = self.block_statement();
+        let locals_count = self.scope.end_scope();
+        for _ in 0..locals_count {
+            self.chunk.push_code(OpCode::Pop, self.previous_token().line)
+        }
+        result
+    }
+
+    fn block_statement(&mut self) -> CompilationResult {
+        loop {
+            match self.current_token().token_type {
+                TokenType::RightBrace => {
+                    self.advance()?;
+                    return Ok(())
+                },
+                TokenType::Eof => {
+                    return Err(
+                        CompileError::make_from_token(self.current_token(), "Expect '}' after block.")
+                    )
+                }
+                _ => {
+                    self.declaration()?;
+                }
+            }
+        }
     }
 
     #[inline]
@@ -466,7 +520,7 @@ pub enum CompileError {
 }
 
 impl CompileError {
-    fn make_from_token(token: &Token, message: &'static str) -> Self {
+    pub fn make_from_token(token: &Token, message: &'static str) -> Self {
         CompileError::TokenError {
             line: token.line,
             lexeme: token.lexeme,

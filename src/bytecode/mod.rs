@@ -16,6 +16,7 @@ mod scanner;
 mod token;
 mod parse_rule;
 mod vec;
+mod scope;
 pub mod object_string;
 pub mod hash_table;
 
