@@ -60,13 +60,6 @@ impl Chunk {
         self.push(index as u8, line);
     }
 
-    pub fn get_global_variable(&mut self, constant: Rc<ObjectString>, line: usize) {
-        println!("get global variable {:?}", &constant);
-        let index = self.push_constant_to_pool(Value::String(constant));
-        self.push_code(OpCode::GetGlobal, line);
-        self.push(index as u8, line);
-    }
-
     #[inline]
     pub fn push_constant_to_pool(&mut self, constant: Value) -> usize {
         self.constants.push(constant);

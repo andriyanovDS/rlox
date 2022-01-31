@@ -14,6 +14,7 @@ use super::parse_rule::{ParseType, Precedence, ParseRule};
 pub struct Compiler<'a> {
     scanner: Scanner<'a>,
     interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
+    string_constants: HashTable<Rc<ObjectString>, u8>,
     source: &'a str,
     chunk: Chunk,
     parse_rules: [ParseRule<'a>; 39],
@@ -29,6 +30,7 @@ impl<'a> Compiler<'a> {
         Self {
             scanner: Scanner::new(source),
             interned_strings,
+            string_constants: HashTable::new(),
             source,
             chunk: Chunk::new(),
             parse_rules: Compiler::make_parse_rules(),
@@ -263,7 +265,15 @@ impl<'a> Compiler<'a> {
 
     fn variable(&mut self, can_assign: bool) -> CompilationResult {
         let object = self.intern_string();
-        let index = self.chunk.push_constant_to_pool(Value::String(object)) as u8;
+        let index = match self.string_constants.find(&object) {
+            Some(index) => *index,
+            None => {
+                let string = Rc::clone(&object);
+                let index = self.chunk.push_constant_to_pool(Value::String(object)) as u8;
+                self.string_constants.insert(string, index);
+                index
+            }
+        };
         if can_assign && self.current_token().token_type == TokenType::Equal {
             self.advance()?;
             self.expression()?;
