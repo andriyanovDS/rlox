@@ -29,10 +29,7 @@ impl Stack {
             None
         } else {
             self.top_index -= 1;
-            let value = unsafe {
-                std::mem::replace(&mut self.buffer[self.top_index], NOT_INITIALIZED)
-            };
-            Some(value)
+            Some(std::mem::replace(&mut self.buffer[self.top_index], NOT_INITIALIZED))
         }
     }
 
@@ -48,12 +45,23 @@ impl Stack {
         }
     }
 
+    #[inline]
     pub fn modify_last(&mut self, value: Value) {
+        self.modify_at_index(self.top_index - 1, value);
+    }
+
+    #[inline]
+    pub fn modify_at_index(&mut self, index: usize, value: Value) {
         if self.top_index == 0 {
             return;
         }
-        let index = self.top_index - 1;
         self.buffer[index] = value;
+    }
+
+    #[inline]
+    pub fn copy_value(&self, index: usize) -> Value {
+        assert!(index <= self.top_index);
+        self.buffer[index].clone()
     }
 
     pub fn print_debug_info(&self) {

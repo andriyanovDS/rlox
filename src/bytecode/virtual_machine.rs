@@ -58,6 +58,8 @@ impl VirtualMachine {
                     OpCode::DefineGlobal => self.define_global_variable(chunk, &mut iter),
                     OpCode::GetGlobal => self.get_global_variable(chunk, &mut iter, offset)?,
                     OpCode::SetGlobal => self.set_global_variable(chunk, &mut iter, offset)?,
+                    OpCode::GetLocal => self.get_local_variable(&mut iter),
+                    OpCode::SetLocal => self.set_local_variable(&mut iter),
                 }
             } else {
                 self.stack.print_debug_info();
@@ -207,6 +209,19 @@ impl VirtualMachine {
         } else {
             panic!("Unexpected value type in global variable");
         }
+    }
+
+    #[inline]
+    fn get_local_variable(&mut self, iter: &mut Iter<u8>) {
+        let index = *(iter.next().unwrap()) as usize;
+        self.stack.push(self.stack.copy_value(index));
+    }
+
+    #[inline]
+    fn set_local_variable(&mut self, iter: &mut Iter<u8>) {
+        let index = *(iter.next().unwrap()) as usize;
+        let value = self.stack.peek_end(0).unwrap().clone();
+        self.stack.modify_at_index(index, value);
     }
 
     fn runtime_error(&mut self, message: String, offset: usize, chunk: &Chunk) {

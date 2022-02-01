@@ -76,7 +76,8 @@ impl Chunk {
             | OpCode::Less | OpCode::Print | OpCode::Pop => {
                 println!("{} {} at {}", offset, op_code, line);
             }
-            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal => {
+            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal
+            | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal => {
                 let value = self.read_constant(iter);
                 println!("{} {} {:?} at {}", offset, op_code, value, line);
             }

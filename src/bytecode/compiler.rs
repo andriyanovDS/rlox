@@ -318,28 +318,40 @@ impl<'a> Compiler<'a> {
     }
 
     fn variable(&mut self, can_assign: bool) -> CompilationResult {
-        let object = self.intern_string();
-        let index = match self.string_constants.find(&object) {
-            Some(index) => *index,
-            None => {
-                let string = Rc::clone(&object);
-                let index = self.chunk.push_constant_to_pool(Value::String(object)) as u8;
-                self.string_constants.insert(string, index);
-                index
-            }
-        };
+        let (set_code, get_code, index) = self.variable_operations();
         if can_assign && self.current_token().token_type == TokenType::Equal {
             self.advance()?;
             self.expression()?;
             let line = self.previous_token().line;
-            self.chunk.push_code(OpCode::SetGlobal, line);
+            self.chunk.push_code(set_code, line);
             self.chunk.push(index, line);
         } else {
             let line = self.previous_token().line;
-            self.chunk.push_code(OpCode::GetGlobal, line);
+            self.chunk.push_code(get_code, line);
             self.chunk.push(index, line);
         }
         Ok(())
+    }
+
+    #[inline]
+    fn variable_operations(&mut self) -> (OpCode, OpCode, u8) {
+        let local_index = self.scope.find_local(self.previous_token(), self.source);
+        match local_index {
+            Some(index) => (OpCode::SetLocal, OpCode::GetLocal, index),
+            None => {
+                let object = self.intern_string();
+                let index = match self.string_constants.find(&object) {
+                    Some(index) => *index,
+                    None => {
+                        let string = Rc::clone(&object);
+                        let index = self.chunk.push_constant_to_pool(Value::String(object)) as u8;
+                        self.string_constants.insert(string, index);
+                        index
+                    }
+                };
+                (OpCode::SetGlobal, OpCode::GetGlobal, index)
+            }
+        }
     }
 
     #[inline]

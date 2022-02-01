@@ -1,5 +1,7 @@
-use crate::bytecode::compiler::{CompilationResult, CompileError};
-use crate::bytecode::token::{Token, TokenType};
+use std::iter::Rev;
+use std::slice::Iter;
+use super::compiler::{CompilationResult, CompileError};
+use super::token::{Token, TokenType};
 
 const STACK_SIZE: usize = u8::MAX as usize + 1;
 const NOT_INITIALIZED: Local = Local {
@@ -43,9 +45,7 @@ impl Scope {
 
     #[inline]
     pub fn end_scope(&mut self) -> u8 {
-        let local_count = self.locals[0..self.locals_count as usize]
-            .iter()
-            .rev()
+        let local_count = self.locals_iter()
             .take_while(|v| v.depth == self.scope_depth)
             .fold(0u8, |acc, _| acc + 1);
         self.scope_depth -= 1;
@@ -53,9 +53,26 @@ impl Scope {
         local_count
     }
 
+    #[inline]
+    pub fn find_local(&self, token: &Token, source: &str) -> Option<u8> {
+        let lexeme = token.lexeme.as_ref().unwrap().make_slice(source);
+        let end_index = self.locals_count - 1;
+        self.locals_iter()
+            .enumerate()
+            .find_map(|(index, local)| {
+                let stored_lexeme = local.token.lexeme.as_ref().unwrap().make_slice(source);
+                if stored_lexeme == lexeme {
+                    Some(end_index - index as u8)
+                } else {
+                    None
+                }
+            })
+    }
+
+    #[inline]
     pub fn is_redeclaration(&self, token: &Token, source: &str) -> bool {
         let lexeme = token.lexeme.as_ref().unwrap().make_slice(source);
-        for local in self.locals[0..self.locals_count as usize].iter().rev() {
+        for local in self.locals_iter() {
             if local.depth < self.scope_depth {
                 return false;
             }
@@ -79,5 +96,10 @@ impl Scope {
         };
         self.locals_count += 1;
         Ok(())
+    }
+
+    #[inline]
+    fn locals_iter(&self) -> Rev<Iter<Local>> {
+        self.locals[0..self.locals_count as usize].iter().rev()
     }
 }
