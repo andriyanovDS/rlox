@@ -130,6 +130,8 @@ impl<'a> Compiler<'a> {
         if self.scope.is_global_scope() {
             self.chunk.push_code(OpCode::DefineGlobal, line);
             self.chunk.push(index as u8, line);
+        } else {
+            self.scope.mark_local_initialized();
         }
         Ok(())
     }
@@ -318,7 +320,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn variable(&mut self, can_assign: bool) -> CompilationResult {
-        let (set_code, get_code, index) = self.variable_operations();
+        let (set_code, get_code, index) = self.variable_operations()?;
         if can_assign && self.current_token().token_type == TokenType::Equal {
             self.advance()?;
             self.expression()?;
@@ -334,10 +336,10 @@ impl<'a> Compiler<'a> {
     }
 
     #[inline]
-    fn variable_operations(&mut self) -> (OpCode, OpCode, u8) {
-        let local_index = self.scope.find_local(self.previous_token(), self.source);
+    fn variable_operations(&mut self) -> Result<(OpCode, OpCode, u8), CompileError> {
+        let local_index = self.scope.find_local(self.previous_token(), self.source)?;
         match local_index {
-            Some(index) => (OpCode::SetLocal, OpCode::GetLocal, index),
+            Some(index) => Ok((OpCode::SetLocal, OpCode::GetLocal, index)),
             None => {
                 let object = self.intern_string();
                 let index = match self.string_constants.find(&object) {
@@ -349,7 +351,7 @@ impl<'a> Compiler<'a> {
                         index
                     }
                 };
-                (OpCode::SetGlobal, OpCode::GetGlobal, index)
+                Ok((OpCode::SetGlobal, OpCode::GetGlobal, index))
             }
         }
     }

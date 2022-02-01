@@ -54,26 +54,28 @@ impl Scope {
     }
 
     #[inline]
-    pub fn find_local(&self, token: &Token, source: &str) -> Option<u8> {
+    pub fn find_local(&self, token: &Token, source: &str) -> Result<Option<u8>, CompileError> {
         let lexeme = token.lexeme.as_ref().unwrap().make_slice(source);
         let end_index = self.locals_count - 1;
-        self.locals_iter()
-            .enumerate()
-            .find_map(|(index, local)| {
-                let stored_lexeme = local.token.lexeme.as_ref().unwrap().make_slice(source);
-                if stored_lexeme == lexeme {
-                    Some(end_index - index as u8)
-                } else {
-                    None
-                }
-            })
+        for (index, local) in self.locals_iter().enumerate() {
+            let stored_lexeme = local.token.lexeme.as_ref().unwrap().make_slice(source);
+            if stored_lexeme != lexeme {
+                continue;
+            }
+            if local.depth == 0 {
+                let message = "Can't read local variable in its own initializer.";
+                return Err(CompileError::make_from_token(token, message));
+            }
+            return Ok(Some(end_index - index as u8));
+        }
+        Ok(None)
     }
 
     #[inline]
     pub fn is_redeclaration(&self, token: &Token, source: &str) -> bool {
         let lexeme = token.lexeme.as_ref().unwrap().make_slice(source);
         for local in self.locals_iter() {
-            if local.depth < self.scope_depth {
+            if local.depth != 0 && local.depth < self.scope_depth {
                 return false;
             }
             let stored_lexeme = local.token.lexeme.as_ref().unwrap().make_slice(source);
@@ -92,10 +94,16 @@ impl Scope {
         let index = self.locals_count;
         self.locals[index as usize] = Local {
             token,
-            depth: self.scope_depth,
+            depth: 0,
         };
         self.locals_count += 1;
         Ok(())
+    }
+
+    #[inline]
+    pub fn mark_local_initialized(&mut self) {
+        let local = &mut self.locals[(self.locals_count - 1) as usize];
+        local.depth = self.scope_depth;
     }
 
     #[inline]
