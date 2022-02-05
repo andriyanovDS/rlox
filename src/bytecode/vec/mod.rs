@@ -2,7 +2,7 @@ mod raw_val_iter;
 mod raw_vec;
 
 use std::marker::PhantomData;
-use std::ops::{Deref};
+use std::ops::{Deref, DerefMut};
 use std::ptr;
 use std::{slice, mem};
 use std::iter;
@@ -94,6 +94,14 @@ impl<Element> Deref for Vec<Element> {
     fn deref(&self) -> &[Element] {
         unsafe {
             slice::from_raw_parts(self.pointer(), self.length)
+        }
+    }
+}
+
+impl<Element> DerefMut for Vec<Element> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe {
+            slice::from_raw_parts_mut(self.pointer(), self.length)
         }
     }
 }

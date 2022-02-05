@@ -105,6 +105,10 @@ impl<'a> Compiler<'a> {
                 self.advance()?;
                 self.print_statement()
             },
+            TokenType::If => {
+                self.advance()?;
+                self.if_statement()
+            }
             TokenType::LeftBrace => self.parse_block(),
             _ => self.expression_statement()
         }
@@ -191,6 +195,38 @@ impl<'a> Compiler<'a> {
                     self.declaration()?;
                 }
             }
+        }
+    }
+
+    fn if_statement(&mut self) -> CompilationResult {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.")?;
+        self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
+
+        let offset = self.emit_jump(OpCode::JumpIfFalse, self.current_token().line);
+        self.statement()?;
+        self.patch_jump(offset)
+    }
+
+    #[inline]
+    fn emit_jump(&mut self, op_code: OpCode, line: usize) -> usize {
+        self.chunk.push_code(op_code, line);
+        self.chunk.push(0, line);
+        self.chunk.push(0, line);
+        self.chunk.codes.length - 2
+    }
+
+    #[inline]
+    fn patch_jump(&mut self, offset: usize) -> CompilationResult {
+        let jump = self.chunk.codes.length - offset - 2;
+        if jump > u16::MAX as usize {
+            let message = "Too much code to jump over.";
+            Err(CompileError::make_from_token(self.current_token(), message))
+        } else {
+            let jump = jump as u16;
+            self.chunk.codes[offset] = (jump >> 8u8) as u8 & 0xff;
+            self.chunk.codes[offset + 1] = (jump & 0xff) as u8;
+            Ok(())
         }
     }
 

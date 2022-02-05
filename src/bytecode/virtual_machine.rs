@@ -60,6 +60,7 @@ impl VirtualMachine {
                     OpCode::SetGlobal => self.set_global_variable(chunk, &mut iter, offset)?,
                     OpCode::GetLocal => self.get_local_variable(&mut iter),
                     OpCode::SetLocal => self.set_local_variable(&mut iter),
+                    OpCode::JumpIfFalse => self.handle_jump_if_false(&mut iter),
                 }
             } else {
                 self.stack.print_debug_info();
@@ -222,6 +223,18 @@ impl VirtualMachine {
         let index = *(iter.next().unwrap()) as usize;
         let value = self.stack.peek_end(0).unwrap().clone();
         self.stack.modify_at_index(index, value);
+    }
+
+    #[inline]
+    fn handle_jump_if_false(&mut self, iter: &mut Iter<u8>) {
+        let offset = Chunk::read_condition_offset(iter);
+        let top_value = self.stack.pop().unwrap();
+        match top_value {
+            Value::Bool(false) | Value::Nil => {
+                iter.nth(offset - 1);
+            },
+            _ => {},
+        }
     }
 
     fn runtime_error(&mut self, message: String, offset: usize, chunk: &Chunk) {

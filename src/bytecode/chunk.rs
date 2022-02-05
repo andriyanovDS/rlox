@@ -85,6 +85,10 @@ impl Chunk {
                 let value = self.read_constant_long(iter);
                 println!("{} {} {:?} at {}", offset, op_code, value, line);
             }
+            OpCode::JumpIfFalse => {
+                let condition_offset = Chunk::read_condition_offset(iter);
+                println!("{} {} {} at {}", offset, op_code, condition_offset, line)
+            }
         }
         offset + op_code.code_size()
     }
@@ -97,10 +101,17 @@ impl Chunk {
 
     #[inline]
     pub fn read_constant_long(&self, iterator: &mut Iter<u8>) -> &Value {
-        let index = iterator.next().unwrap().clone() as u32
-            | u32::from(iterator.next().unwrap().clone()) << 8u8
-            | u32::from(iterator.next().unwrap().clone()) << 16u8;
+        let index = *(iterator.next().unwrap()) as u32
+            | u32::from(*(iterator.next().unwrap())) << 8u8
+            | u32::from(*(iterator.next().unwrap())) << 16u8;
         self.constants.value(index as usize)
+    }
+
+    #[inline]
+    pub fn read_condition_offset(iterator: &mut Iter<u8>) -> usize {
+        usize::from(*(iterator.next().unwrap())) << 8u8
+            | (*iterator.next().unwrap()) as usize
+
     }
 
     pub fn line(&self, offset: usize) -> usize {
