@@ -25,6 +25,7 @@ pub enum OpCode {
     GetLocal,
     SetLocal,
     JumpIfFalse,
+    Jump,
 }
 
 impl OpCode {
@@ -65,6 +66,7 @@ impl Display for OpCode {
             OpCode::GetLocal => write!(f, "OP_GET_LOCAL"),
             OpCode::SetLocal => write!(f, "OP_SET_LOCAL"),
             OpCode::JumpIfFalse => write!(f, "OP_JUMP_IF_FALSE"),
+            OpCode::Jump => write!(f, "OP_JUMP"),
         }
     }
 }

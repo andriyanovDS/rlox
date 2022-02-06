@@ -85,7 +85,7 @@ impl Chunk {
                 let value = self.read_constant_long(iter);
                 println!("{} {} {:?} at {}", offset, op_code, value, line);
             }
-            OpCode::JumpIfFalse => {
+            OpCode::JumpIfFalse | OpCode::Jump => {
                 let condition_offset = Chunk::read_condition_offset(iter);
                 println!("{} {} {} at {}", offset, op_code, condition_offset, line)
             }
@@ -148,8 +148,8 @@ impl Chunk {
         } else {
             self.push_code(OpCode::ConstantLong, line);
             self.push((index & 0xff) as u8, line);
-            self.push((index >> 8u8) as u8 & 0xff, line);
-            self.push((index >> 16u8) as u8 & 0xff, line);
+            self.push(((index >> 8u8) & 0xff) as u8, line);
+            self.push(((index >> 8u8) & 0xff) as u8, line);
         }
     }
 }

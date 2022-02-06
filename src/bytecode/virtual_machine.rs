@@ -61,6 +61,10 @@ impl VirtualMachine {
                     OpCode::GetLocal => self.get_local_variable(&mut iter),
                     OpCode::SetLocal => self.set_local_variable(&mut iter),
                     OpCode::JumpIfFalse => self.handle_jump_if_false(&mut iter),
+                    OpCode::Jump => {
+                        let offset = Chunk::read_condition_offset(&mut iter);
+                        iter.nth(offset);
+                    }
                 }
             } else {
                 self.stack.print_debug_info();
@@ -228,10 +232,10 @@ impl VirtualMachine {
     #[inline]
     fn handle_jump_if_false(&mut self, iter: &mut Iter<u8>) {
         let offset = Chunk::read_condition_offset(iter);
-        let top_value = self.stack.pop().unwrap();
+        let top_value = self.stack.peek_end(0).unwrap();
         match top_value {
             Value::Bool(false) | Value::Nil => {
-                iter.nth(offset - 1);
+                iter.nth(offset);
             },
             _ => {},
         }

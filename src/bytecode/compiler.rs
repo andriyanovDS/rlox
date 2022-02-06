@@ -203,9 +203,22 @@ impl<'a> Compiler<'a> {
         self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
 
-        let offset = self.emit_jump(OpCode::JumpIfFalse, self.current_token().line);
+        let if_condition_line = self.current_token().line;
+        let then_jump = self.emit_jump(OpCode::JumpIfFalse, if_condition_line);
+        self.chunk.push_code(OpCode::Pop, if_condition_line);
         self.statement()?;
-        self.patch_jump(offset)
+
+        let else_jump = self.emit_jump(OpCode::Jump, self.current_token().line);
+        self.patch_jump(then_jump)?;
+        self.chunk.push_code(OpCode::Pop, if_condition_line);
+
+        if self.current_token().token_type == TokenType::Else {
+            self.advance()?;
+            self.statement()?;
+            self.patch_jump(else_jump)
+        } else {
+            Ok(())
+        }
     }
 
     #[inline]
@@ -224,7 +237,7 @@ impl<'a> Compiler<'a> {
             Err(CompileError::make_from_token(self.current_token(), message))
         } else {
             let jump = jump as u16;
-            self.chunk.codes[offset] = (jump >> 8u8) as u8 & 0xff;
+            self.chunk.codes[offset] = ((jump >> 8u8) & 0xff) as u8;
             self.chunk.codes[offset + 1] = (jump & 0xff) as u8;
             Ok(())
         }
