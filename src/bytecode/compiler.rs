@@ -348,6 +348,18 @@ impl<'a> Compiler<'a> {
         self.patch_jump(jump)
     }
 
+    fn or_operator(&mut self) -> CompilationResult {
+        let line = self.current_token().line;
+        let else_jump = self.emit_jump(OpCode::JumpIfFalse, line);
+        let end_jump = self.emit_jump(OpCode::Jump, line);
+
+        self.patch_jump(else_jump)?;
+        self.chunk.push_code(OpCode::Pop, line);
+
+        self.parse_precedence(Precedence::Or)?;
+        self.patch_jump(end_jump)
+    }
+
     fn emit_number(&mut self, _can_assign: bool) -> CompilationResult {
         let number: f32 = self.previous_token().lexeme
             .as_ref()
@@ -569,7 +581,10 @@ impl<'a> Compiler<'a> {
                 parse_type: ParseType::Prefix(Compiler::literal),
                 precedence: Precedence::None
             }, // TokenType::Nil
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Or
+            ParseRule {
+                parse_type: ParseType::Infix(Compiler::or_operator),
+                precedence: Precedence::Or
+            }, // TokenType::Or
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Print
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Return
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Super
