@@ -63,7 +63,9 @@ impl VirtualMachine {
                     OpCode::JumpIfFalse => self.handle_jump_if_false(&mut iter),
                     OpCode::Jump => {
                         let offset = Chunk::read_condition_offset(&mut iter);
-                        iter.nth(offset);
+                        if offset > 0 {
+                            iter.nth(offset - 1);
+                        }
                     }
                 }
             } else {
@@ -235,7 +237,7 @@ impl VirtualMachine {
         let top_value = self.stack.peek_end(0).unwrap();
         match top_value {
             Value::Bool(false) | Value::Nil => {
-                iter.nth(offset);
+                iter.nth(offset - 1);
             },
             _ => {},
         }

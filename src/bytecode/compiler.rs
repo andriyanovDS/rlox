@@ -339,6 +339,15 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    fn and_operator(&mut self) -> CompilationResult {
+        let line = self.current_token().line;
+        let jump = self.emit_jump(OpCode::JumpIfFalse, line);
+        self.chunk.push_code(OpCode::Pop, line);
+
+        self.parse_precedence(Precedence::And)?;
+        self.patch_jump(jump)
+    }
+
     fn emit_number(&mut self, _can_assign: bool) -> CompilationResult {
         let number: f32 = self.previous_token().lexeme
             .as_ref()
@@ -543,7 +552,10 @@ impl<'a> Compiler<'a> {
                 parse_type: ParseType::Prefix(Compiler::emit_number),
                 precedence: Precedence::None
             },                                                                       // TokenType::Number
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::And
+            ParseRule {
+                parse_type: ParseType::Infix(Compiler::and_operator),
+                precedence: Precedence::And
+            }, // TokenType::And
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Class
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Else
             ParseRule {
