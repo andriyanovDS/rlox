@@ -55,6 +55,9 @@ impl Scope {
 
     #[inline]
     pub fn find_local(&self, token: &Token, source: &str) -> Result<Option<u8>, CompileError> {
+        if self.locals_count == 0 {
+            return Ok(None);
+        }
         let lexeme = token.lexeme.as_ref().unwrap().make_slice(source);
         let end_index = self.locals_count - 1;
         for (index, local) in self.locals_iter().enumerate() {

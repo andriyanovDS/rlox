@@ -104,10 +104,14 @@ impl<'a> Compiler<'a> {
             TokenType::Print => {
                 self.advance()?;
                 self.print_statement()
-            },
+            }
             TokenType::If => {
                 self.advance()?;
                 self.if_statement()
+            }
+            TokenType::While => {
+                self.advance()?;
+                self.while_statement()
             }
             TokenType::LeftBrace => self.parse_block(),
             _ => self.expression_statement()
@@ -198,6 +202,23 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    fn while_statement(&mut self) -> CompilationResult {
+        let loop_start = self.chunk.codes.length;
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.")?;
+        self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
+
+        let if_condition_line = self.current_token().line;
+        let then_jump = self.emit_jump(OpCode::JumpIfFalse, if_condition_line);
+        self.chunk.push_code(OpCode::Pop, if_condition_line);
+        self.statement()?;
+
+        self.emit_loop(loop_start, if_condition_line);
+        self.patch_jump(then_jump)?;
+        self.chunk.push_code(OpCode::Pop, if_condition_line);
+        Ok(())
+    }
+
     fn if_statement(&mut self) -> CompilationResult {
         self.consume(TokenType::LeftParen, "Expect '(' after 'if'.")?;
         self.expression()?;
@@ -217,6 +238,22 @@ impl<'a> Compiler<'a> {
             self.statement()?;
             self.patch_jump(else_jump)
         } else {
+            Ok(())
+        }
+    }
+
+    #[inline]
+    fn emit_loop(&mut self, loop_start: usize, line: usize) -> CompilationResult {
+        self.chunk.push_code(OpCode::Loop, line);
+
+        let jump = self.chunk.codes.length - loop_start + 2;
+        if jump > u16::MAX as usize {
+            let message = "Too much code to jump over.";
+            Err(CompileError::make_from_token(self.current_token(), message))
+        } else {
+            let jump = jump as u16;
+            self.chunk.push(((jump >> 8u8) & 0xff) as u8, line);
+            self.chunk.push((jump & 0xff) as u8, line);
             Ok(())
         }
     }

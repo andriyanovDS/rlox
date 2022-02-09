@@ -67,6 +67,12 @@ impl VirtualMachine {
                             iter.nth(offset - 1);
                         }
                     }
+                    OpCode::Loop => {
+                        let jump_offset = Chunk::read_condition_offset(&mut iter);
+                        iter = chunk.codes.iter();
+                        iter.nth(offset - jump_offset - 1);
+                        offset -= jump_offset;
+                    }
                 }
             } else {
                 self.stack.print_debug_info();

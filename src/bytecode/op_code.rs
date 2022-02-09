@@ -26,16 +26,17 @@ pub enum OpCode {
     SetLocal,
     JumpIfFalse,
     Jump,
+    Loop,
 }
 
 impl OpCode {
     pub fn code_size(&self) -> usize {
-        if self == &OpCode::Constant {
-            2
-        } else if self == &OpCode::ConstantLong {
-            4
-        } else {
-            1
+        match self {
+            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal
+            | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal => 2,
+            OpCode::JumpIfFalse | OpCode::Loop => 3,
+            OpCode::ConstantLong => 4,
+            _ => 1
         }
     }
 }
@@ -67,6 +68,7 @@ impl Display for OpCode {
             OpCode::SetLocal => write!(f, "OP_SET_LOCAL"),
             OpCode::JumpIfFalse => write!(f, "OP_JUMP_IF_FALSE"),
             OpCode::Jump => write!(f, "OP_JUMP"),
+            OpCode::Loop => write!(f, "OP_LOOP"),
         }
     }
 }
