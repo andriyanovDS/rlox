@@ -88,7 +88,7 @@ impl Chunk {
 
     #[inline]
     pub fn read_constant(&self, iterator: &mut Iter<u8>) -> &Value {
-        let index = iterator.next().unwrap().clone() as usize;
+        let index = *iterator.next().unwrap() as usize;
         self.constants.value(index)
     }
 

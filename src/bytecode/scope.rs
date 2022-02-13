@@ -33,6 +33,8 @@ impl Scope {
         }
     }
 
+    pub fn current_scope_depth(&self) -> u8 { self.scope_depth }
+
     #[inline]
     pub fn is_global_scope(&self) -> bool {
         self.scope_depth == 0
@@ -40,6 +42,7 @@ impl Scope {
 
     #[inline]
     pub fn begin_scope(&mut self) {
+        println!("begin scope {}", self.scope_depth);
         self.scope_depth += 1;
     }
 
@@ -49,6 +52,15 @@ impl Scope {
             .take_while(|v| v.depth == self.scope_depth)
             .fold(0u8, |acc, _| acc + 1);
         self.scope_depth -= 1;
+        self.locals_count -= local_count;
+        local_count
+    }
+
+    #[inline]
+    pub fn remove_to_scope(&mut self, scope_depth: u8) -> u8 {
+        let local_count = self.locals_iter()
+            .take_while(|v| v.depth >= scope_depth)
+            .fold(0u8, |acc, _| acc + 1);
         self.locals_count -= local_count;
         local_count
     }
@@ -91,6 +103,7 @@ impl Scope {
 
     #[inline]
     pub fn add_local(&mut self, token: Token) -> CompilationResult {
+        println!("add local");
         if self.locals_count == u8::MAX {
             return Err(CompileError::make_from_token(&token, "Too many local variables in function."));
         }

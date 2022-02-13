@@ -82,7 +82,7 @@ impl<'a> Scanner<'a> {
             '"' => {
                 self.consume_literal()
                     .map(|size| (TokenType::String, size))
-                    .ok_or(self.make_error("Unterminated string."))
+                    .ok_or_else(|| self.make_error("Unterminated string."))
             },
             character if character.is_digit(10) => Ok((TokenType::Number, self.consume_number())),
             character if character.is_alphanumeric() => {
@@ -225,7 +225,13 @@ impl<'a> Scanner<'a> {
         let mut chars = keyword.chars();
         match chars.next().unwrap() {
             'a' => Scanner::check_keyword(&keyword[1..], "nd", TokenType::And),
-            'c' => Scanner::check_keyword(&keyword[1..], "lass", TokenType::Class),
+            'c' if keyword.len() > 1 => {
+                match chars.next().unwrap() {
+                    'l' => Scanner::check_keyword(&keyword[2..], "ass", TokenType::Class),
+                    'o' => Scanner::check_keyword(&keyword[2..], "ntinue", TokenType::Continue),
+                    _ => TokenType::Identifier
+                }
+            },
             'e' => Scanner::check_keyword(&keyword[1..], "lse", TokenType::Else),
             'i' => Scanner::check_keyword(&keyword[1..], "f", TokenType::If),
             'n' => Scanner::check_keyword(&keyword[1..], "il", TokenType::Nil),

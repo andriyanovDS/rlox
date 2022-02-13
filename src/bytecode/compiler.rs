@@ -22,6 +22,7 @@ pub struct Compiler<'a> {
     parse_rules: [ParseRule<'a>; 39],
     previous_token: Option<Token>,
     current_token: Option<Token>,
+    loop_context: Option<LoopContext>,
 }
 
 impl<'a> Compiler<'a> {
@@ -39,6 +40,7 @@ impl<'a> Compiler<'a> {
             parse_rules: Compiler::make_parse_rules(),
             previous_token: None,
             current_token: None,
+            loop_context: None,
         }
     }
 
@@ -116,6 +118,10 @@ impl<'a> Compiler<'a> {
             TokenType::For => {
                 self.advance()?;
                 self.for_statement()
+            }
+            TokenType::Continue => {
+                self.advance()?;
+                self.continue_statement()
             }
             TokenType::LeftBrace => self.parse_block(),
             _ => self.expression_statement()
@@ -215,7 +221,14 @@ impl<'a> Compiler<'a> {
         let condition_line = self.current_token().line;
         let then_jump = self.emit_jump(OpCode::JumpIfFalse, condition_line);
         self.chunk.push_code(OpCode::Pop, condition_line);
+
+        let previous_loop_context = self.loop_context;
+        self.loop_context = Some(LoopContext {
+            start_index: loop_start,
+            locals_depth: self.scope.current_scope_depth(),
+        });
         self.statement()?;
+        self.loop_context = previous_loop_context;
 
         self.emit_loop(loop_start, condition_line)?;
         self.patch_jump(then_jump)?;
@@ -229,12 +242,22 @@ impl<'a> Compiler<'a> {
         self.consume(TokenType::LeftParen, "Expect '(' after 'for'.")?;
         self.initializer_clause()?;
 
+        let previous_loop_context = self.loop_context;
         let mut loop_start = self.chunk.codes.length;
+        self.loop_context = Some(LoopContext {
+            start_index: loop_start,
+            locals_depth: self.scope.current_scope_depth(),
+        });
         let exit_jump = self.condition_clause()?;
         self.increment_clause(&mut loop_start)?;
+
+        self.loop_context = Some(LoopContext {
+            start_index: loop_start,
+            locals_depth: self.scope.current_scope_depth(),
+        });
         self.statement()?;
+        self.loop_context = previous_loop_context;
         self.emit_loop(loop_start, statement_line)?;
-        println!("loop 123 {}", loop_start);
 
         if let Some(exit_jump) = exit_jump {
             self.patch_jump(exit_jump)?;
@@ -304,10 +327,8 @@ impl<'a> Compiler<'a> {
         if self.current_token().token_type == TokenType::Else {
             self.advance()?;
             self.statement()?;
-            self.patch_jump(else_jump)
-        } else {
-            Ok(())
         }
+        self.patch_jump(else_jump)
     }
 
     #[inline]
@@ -345,6 +366,28 @@ impl<'a> Compiler<'a> {
             self.chunk.codes[offset] = ((jump >> 8u8) & 0xff) as u8;
             self.chunk.codes[offset + 1] = (jump & 0xff) as u8;
             Ok(())
+        }
+    }
+
+    #[inline]
+    fn continue_statement(&mut self) -> CompilationResult {
+        self.consume(TokenType::Semicolon, "Expect ';' after continue statement.")?;
+        let token = self.previous_token();
+        match self.loop_context {
+            Some(context) => {
+                let line = token.line;
+                let locals_count = self.scope.remove_to_scope(context.locals_depth + 1);
+                for _ in 0..locals_count {
+
+                    self.chunk.push_code(OpCode::Pop, line);
+                }
+                println!("jump to {}", context.start_index);
+                self.emit_loop(context.start_index, line)
+            }
+            None => {
+                let token = self.previous_token();
+                Err(CompileError::make_from_token(token, "Can't use 'continue' outside of a loop."))
+            }
         }
     }
 
@@ -722,6 +765,12 @@ impl CompileError {
             message
         }
     }
+}
+
+#[derive(Clone, Copy)]
+struct LoopContext {
+    start_index: usize,
+    locals_depth: u8,
 }
 
 pub type CompilationResult = Result<(), CompileError>;
