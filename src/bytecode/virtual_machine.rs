@@ -62,9 +62,10 @@ impl VirtualMachine {
                     OpCode::SetLocal => self.set_local_variable(&mut iter),
                     OpCode::JumpIfFalse => self.handle_jump_if_false(&mut iter),
                     OpCode::Jump => {
-                        let offset = Chunk::read_condition_offset(&mut iter);
-                        if offset > 0 {
-                            iter.nth(offset - 1);
+                        let jump_offset = Chunk::read_condition_offset(&mut iter);
+                        if jump_offset > 0 {
+                            iter.nth(jump_offset - 1);
+                            offset += jump_offset;
                         }
                     }
                     OpCode::Loop => {

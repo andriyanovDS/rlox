@@ -113,6 +113,10 @@ impl<'a> Compiler<'a> {
                 self.advance()?;
                 self.while_statement()
             }
+            TokenType::For => {
+                self.advance()?;
+                self.for_statement()
+            }
             TokenType::LeftBrace => self.parse_block(),
             _ => self.expression_statement()
         }
@@ -204,18 +208,82 @@ impl<'a> Compiler<'a> {
 
     fn while_statement(&mut self) -> CompilationResult {
         let loop_start = self.chunk.codes.length;
-        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.")?;
+        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.")?;
         self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
 
-        let if_condition_line = self.current_token().line;
-        let then_jump = self.emit_jump(OpCode::JumpIfFalse, if_condition_line);
-        self.chunk.push_code(OpCode::Pop, if_condition_line);
+        let condition_line = self.current_token().line;
+        let then_jump = self.emit_jump(OpCode::JumpIfFalse, condition_line);
+        self.chunk.push_code(OpCode::Pop, condition_line);
         self.statement()?;
 
-        self.emit_loop(loop_start, if_condition_line);
+        self.emit_loop(loop_start, condition_line)?;
         self.patch_jump(then_jump)?;
-        self.chunk.push_code(OpCode::Pop, if_condition_line);
+        self.chunk.push_code(OpCode::Pop, condition_line);
+        Ok(())
+    }
+
+    fn for_statement(&mut self) -> CompilationResult {
+        self.scope.begin_scope();
+        let statement_line = self.current_token().line;
+        self.consume(TokenType::LeftParen, "Expect '(' after 'for'.")?;
+        self.initializer_clause()?;
+
+        let mut loop_start = self.chunk.codes.length;
+        let exit_jump = self.condition_clause()?;
+        self.increment_clause(&mut loop_start)?;
+        self.statement()?;
+        self.emit_loop(loop_start, statement_line)?;
+        println!("loop 123 {}", loop_start);
+
+        if let Some(exit_jump) = exit_jump {
+            self.patch_jump(exit_jump)?;
+            self.chunk.push_code(OpCode::Pop, statement_line);
+        }
+        self.scope.end_scope();
+        Ok(())
+    }
+
+    #[inline]
+    fn initializer_clause(&mut self) -> CompilationResult {
+        match self.current_token().token_type {
+            TokenType::Semicolon => self.advance(),
+            TokenType::Var => {
+                self.advance()?;
+                self.variable_declaration()
+            }
+            _ => self.expression_statement()
+        }
+    }
+
+    #[inline]
+    fn condition_clause(&mut self) -> Result<Option<usize>, CompileError> {
+        if self.current_token().token_type == TokenType::Semicolon {
+            return self.advance().map(|_| None);
+        }
+        self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after loop condition.")?;
+        let line = self.current_token().line;
+        let jump = self.emit_jump(OpCode::JumpIfFalse, line);
+        self.chunk.push_code(OpCode::Pop, line);
+        Ok(Some(jump))
+    }
+
+    #[inline]
+    fn increment_clause(&mut self, loop_start: &mut usize) -> CompilationResult {
+        if self.current_token().token_type == TokenType::RightParen {
+            return self.advance();
+        }
+        let line = self.current_token().line;
+        let body_jump = self.emit_jump(OpCode::Jump, line);
+        let increment_start = self.chunk.codes.length;
+        self.expression()?;
+        self.chunk.push_code(OpCode::Pop, line);
+        self.consume(TokenType::RightParen, "Expect ')' after for clauses.")?;
+
+        self.emit_loop(*loop_start, line)?;
+        *loop_start = increment_start;
+        self.patch_jump(body_jump)?;
         Ok(())
     }
 

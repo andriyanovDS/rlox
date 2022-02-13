@@ -34,7 +34,7 @@ impl OpCode {
         match self {
             OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal
             | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal => 2,
-            OpCode::JumpIfFalse | OpCode::Loop => 3,
+            OpCode::JumpIfFalse | OpCode::Loop | OpCode::Jump => 3,
             OpCode::ConstantLong => 4,
             _ => 1
         }
