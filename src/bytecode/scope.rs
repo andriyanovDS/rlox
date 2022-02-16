@@ -42,7 +42,6 @@ impl Scope {
 
     #[inline]
     pub fn begin_scope(&mut self) {
-        println!("begin scope {}", self.scope_depth);
         self.scope_depth += 1;
     }
 
@@ -103,7 +102,6 @@ impl Scope {
 
     #[inline]
     pub fn add_local(&mut self, token: Token) -> CompilationResult {
-        println!("add local");
         if self.locals_count == u8::MAX {
             return Err(CompileError::make_from_token(&token, "Too many local variables in function."));
         }

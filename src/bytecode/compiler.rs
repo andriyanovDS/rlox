@@ -381,7 +381,6 @@ impl<'a> Compiler<'a> {
 
                     self.chunk.push_code(OpCode::Pop, line);
                 }
-                println!("jump to {}", context.start_index);
                 self.emit_loop(context.start_index, line)
             }
             None => {
