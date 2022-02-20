@@ -1,10 +1,17 @@
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use crate::bytecode::hash_table::{Hashable, HashTable};
+use super::hash_table::{Hashable, HashTable};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ObjectString {
     pub value: String,
     hash: usize,
+}
+
+impl Debug for ObjectString {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
 }
 
 impl ObjectString {

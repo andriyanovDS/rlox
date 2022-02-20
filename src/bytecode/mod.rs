@@ -19,6 +19,7 @@ mod vec;
 mod scope;
 pub mod object_string;
 pub mod hash_table;
+mod object_function;
 
 pub fn run_interpreter(script: String) {
     let interned_strings = Rc::new(

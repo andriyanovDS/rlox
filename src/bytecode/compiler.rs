@@ -1,5 +1,6 @@
-use std::cell::RefCell;
+use std::cell::{RefCell};
 use std::rc::Rc;
+use super::object_function::{FunctionType};
 use super::scope::Scope;
 use super::hash_table::HashTable;
 use super::object_string::ObjectString;
@@ -18,7 +19,7 @@ pub struct Compiler<'a> {
     string_constants: HashTable<Rc<ObjectString>, u8>,
     scope: Scope,
     source: &'a str,
-    chunk: Chunk,
+    function_type: FunctionType,
     parse_rules: [ParseRule<'a>; 39],
     previous_token: Option<Token>,
     current_token: Option<Token>,
@@ -36,7 +37,7 @@ impl<'a> Compiler<'a> {
             string_constants: HashTable::new(),
             scope: Scope::new(),
             source,
-            chunk: Chunk::new(),
+            function_type: FunctionType::Script(Chunk::new()),
             parse_rules: Compiler::make_parse_rules(),
             previous_token: None,
             current_token: None,
@@ -44,12 +45,11 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn chunk(&self) -> &Chunk { &self.chunk }
-
-    pub fn compile(&mut self) {
+    pub fn compile(&mut self) -> &FunctionType {
         if let Err(error) = self.start_compilation() {
             self.handle_error(&error);
         }
+        &self.function_type
     }
 
     fn start_compilation(&mut self) -> CompilationResult {
@@ -67,7 +67,30 @@ impl<'a> Compiler<'a> {
     }
 
     fn end_compiler(&mut self, line: usize) {
-        self.chunk.push_code(OpCode::Return, line);
+        self.modify_chunk(|chunk| chunk.push_code(OpCode::Return, line));
+    }
+
+    #[inline]
+    fn modify_chunk<F, R>(&mut self, callback: F) -> R where F: FnOnce(&mut Chunk) -> R {
+        match &mut self.function_type {
+            FunctionType::Script(chunk) => {
+                callback(chunk)
+            },
+            FunctionType::Function(func) => {
+                let mut func = func.as_ref().borrow_mut();
+                callback(&mut func.chunk)
+            },
+        }
+    }
+
+    #[inline]
+    fn current_chunk_size(&self) -> usize {
+        match &self.function_type {
+            FunctionType::Script(chunk) => chunk.codes.length,
+            FunctionType::Function(func) => {
+                func.as_ref().borrow().chunk.codes.length
+            },
+        }
     }
 
     fn advance(&mut self) -> CompilationResult {
@@ -132,7 +155,9 @@ impl<'a> Compiler<'a> {
         self.parse_variable("Expect variable name.")?;
         let index = if self.scope.is_global_scope() {
             let object = self.intern_string();
-            self.chunk.push_constant_to_pool(Value::String(object))
+            self.modify_chunk(|chunk| {
+                chunk.push_constant_to_pool(Value::String(object))
+            })
         } else {
             self.declare_local_variable()?;
             0
@@ -142,12 +167,14 @@ impl<'a> Compiler<'a> {
             self.advance()?;
             self.expression()?;
         } else {
-            self.chunk.push_code(OpCode::Nil, line);
+            self.modify_chunk(|chunk| chunk.push_code(OpCode::Nil, line));
         }
         self.consume(TokenType::Semicolon, "Expect ';' after variable declaration.")?;
         if self.scope.is_global_scope() {
-            self.chunk.push_code(OpCode::DefineGlobal, line);
-            self.chunk.push(index as u8, line);
+            self.modify_chunk(|chunk| {
+                chunk.push_code(OpCode::DefineGlobal, line);
+                chunk.push(index as u8, line);
+            });
         } else {
             self.scope.mark_local_initialized();
         }
@@ -188,7 +215,8 @@ impl<'a> Compiler<'a> {
         let result = self.block_statement();
         let locals_count = self.scope.end_scope();
         for _ in 0..locals_count {
-            self.chunk.push_code(OpCode::Pop, self.previous_token().line)
+            let line = self.previous_token().line;
+            self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
         }
         result
     }
@@ -213,14 +241,14 @@ impl<'a> Compiler<'a> {
     }
 
     fn while_statement(&mut self) -> CompilationResult {
-        let loop_start = self.chunk.codes.length;
+        let loop_start = self.current_chunk_size();
         self.consume(TokenType::LeftParen, "Expect '(' after 'while'.")?;
         self.expression()?;
         self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
 
         let condition_line = self.current_token().line;
         let then_jump = self.emit_jump(OpCode::JumpIfFalse, condition_line);
-        self.chunk.push_code(OpCode::Pop, condition_line);
+        self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, condition_line));
 
         let previous_loop_context = self.loop_context;
         self.loop_context = Some(LoopContext {
@@ -232,7 +260,7 @@ impl<'a> Compiler<'a> {
 
         self.emit_loop(loop_start, condition_line)?;
         self.patch_jump(then_jump)?;
-        self.chunk.push_code(OpCode::Pop, condition_line);
+        self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, condition_line));
         Ok(())
     }
 
@@ -243,7 +271,7 @@ impl<'a> Compiler<'a> {
         self.initializer_clause()?;
 
         let previous_loop_context = self.loop_context;
-        let mut loop_start = self.chunk.codes.length;
+        let mut loop_start = self.current_chunk_size();
         self.loop_context = Some(LoopContext {
             start_index: loop_start,
             locals_depth: self.scope.current_scope_depth(),
@@ -261,7 +289,7 @@ impl<'a> Compiler<'a> {
 
         if let Some(exit_jump) = exit_jump {
             self.patch_jump(exit_jump)?;
-            self.chunk.push_code(OpCode::Pop, statement_line);
+            self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, statement_line));
         }
         self.scope.end_scope();
         Ok(())
@@ -288,7 +316,7 @@ impl<'a> Compiler<'a> {
         self.consume(TokenType::Semicolon, "Expect ';' after loop condition.")?;
         let line = self.current_token().line;
         let jump = self.emit_jump(OpCode::JumpIfFalse, line);
-        self.chunk.push_code(OpCode::Pop, line);
+        self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
         Ok(Some(jump))
     }
 
@@ -299,9 +327,9 @@ impl<'a> Compiler<'a> {
         }
         let line = self.current_token().line;
         let body_jump = self.emit_jump(OpCode::Jump, line);
-        let increment_start = self.chunk.codes.length;
+        let increment_start = self.current_chunk_size();
         self.expression()?;
-        self.chunk.push_code(OpCode::Pop, line);
+        self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
         self.consume(TokenType::RightParen, "Expect ')' after for clauses.")?;
 
         self.emit_loop(*loop_start, line)?;
@@ -317,12 +345,12 @@ impl<'a> Compiler<'a> {
 
         let if_condition_line = self.current_token().line;
         let then_jump = self.emit_jump(OpCode::JumpIfFalse, if_condition_line);
-        self.chunk.push_code(OpCode::Pop, if_condition_line);
+        self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, if_condition_line));
         self.statement()?;
 
         let else_jump = self.emit_jump(OpCode::Jump, self.current_token().line);
         self.patch_jump(then_jump)?;
-        self.chunk.push_code(OpCode::Pop, if_condition_line);
+        self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, if_condition_line));
 
         if self.current_token().token_type == TokenType::Else {
             self.advance()?;
@@ -333,40 +361,51 @@ impl<'a> Compiler<'a> {
 
     #[inline]
     fn emit_loop(&mut self, loop_start: usize, line: usize) -> CompilationResult {
-        self.chunk.push_code(OpCode::Loop, line);
-
-        let jump = self.chunk.codes.length - loop_start + 2;
-        if jump > u16::MAX as usize {
-            let message = "Too much code to jump over.";
-            Err(CompileError::make_from_token(self.current_token(), message))
-        } else {
-            let jump = jump as u16;
-            self.chunk.push(((jump >> 8u8) & 0xff) as u8, line);
-            self.chunk.push((jump & 0xff) as u8, line);
-            Ok(())
-        }
+        self
+            .modify_chunk(|chunk| {
+                chunk.push_code(OpCode::Loop, line);
+                let jump = chunk.codes.length - loop_start + 2;
+                if jump > u16::MAX as usize {
+                    Err("Too much code to jump over.")
+                } else {
+                    let jump = jump as u16;
+                    chunk.push(((jump >> 8u8) & 0xff) as u8, line);
+                    chunk.push((jump & 0xff) as u8, line);
+                    Ok(())
+                }
+            })
+            .map_err(|message| {
+                CompileError::make_from_token(self.current_token(), message)
+            })
     }
 
     #[inline]
     fn emit_jump(&mut self, op_code: OpCode, line: usize) -> usize {
-        self.chunk.push_code(op_code, line);
-        self.chunk.push(0, line);
-        self.chunk.push(0, line);
-        self.chunk.codes.length - 2
+        self.modify_chunk(|chunk| {
+            chunk.push_code(op_code, line);
+            chunk.push(0, line);
+            chunk.push(0, line);
+            chunk.codes.length - 2
+        })
     }
 
     #[inline]
     fn patch_jump(&mut self, offset: usize) -> CompilationResult {
-        let jump = self.chunk.codes.length - offset - 2;
-        if jump > u16::MAX as usize {
-            let message = "Too much code to jump over.";
-            Err(CompileError::make_from_token(self.current_token(), message))
-        } else {
-            let jump = jump as u16;
-            self.chunk.codes[offset] = ((jump >> 8u8) & 0xff) as u8;
-            self.chunk.codes[offset + 1] = (jump & 0xff) as u8;
-            Ok(())
-        }
+        self
+            .modify_chunk(|chunk| {
+                let jump = chunk.codes.length - offset - 2;
+                if jump > u16::MAX as usize {
+                    Err("Too much code to jump over.")
+                } else {
+                    let jump = jump as u16;
+                    chunk.codes[offset] = ((jump >> 8u8) & 0xff) as u8;
+                    chunk.codes[offset + 1] = (jump & 0xff) as u8;
+                    Ok(())
+                }
+            })
+            .map_err(|message| {
+                CompileError::make_from_token(self.current_token(), message)
+            })
     }
 
     #[inline]
@@ -378,8 +417,7 @@ impl<'a> Compiler<'a> {
                 let line = token.line;
                 let locals_count = self.scope.remove_to_scope(context.locals_depth + 1);
                 for _ in 0..locals_count {
-
-                    self.chunk.push_code(OpCode::Pop, line);
+                    self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
                 }
                 self.emit_loop(context.start_index, line)
             }
@@ -446,11 +484,13 @@ impl<'a> Compiler<'a> {
         let line = previous_token.line;
         let token_type = previous_token.token_type;
         self.parse_precedence(Precedence::Unary)?;
-        match token_type {
-            TokenType::Minus => self.chunk.push_code(OpCode::Negate, line),
-            TokenType::Bang => self.chunk.push_code(OpCode::Not, line),
-            _ => {}
-        }
+        self.modify_chunk(|chunk| {
+            match token_type {
+                TokenType::Minus => chunk.push_code(OpCode::Negate, line),
+                TokenType::Bang => chunk.push_code(OpCode::Not, line),
+                _ => {}
+            }
+        });
         Ok(())
     }
 
@@ -461,35 +501,37 @@ impl<'a> Compiler<'a> {
         let rule = self.parse_rule(&token_type);
         let precedence = Precedence::try_from((rule.precedence as u8) + 1).unwrap();
         self.parse_precedence(precedence)?;
-        match token_type {
-            TokenType::Plus => self.chunk.push_code(OpCode::Add, token_line),
-            TokenType::Minus => self.chunk.push_code(OpCode::Subtract, token_line),
-            TokenType::Star => self.chunk.push_code(OpCode::Multiply, token_line),
-            TokenType::Slash => self.chunk.push_code(OpCode::Divide, token_line),
-            TokenType::BangEqual => {
-                self.chunk.push_code(OpCode::Equal, token_line);
-                self.chunk.push_code(OpCode::Not, token_line);
-            }
-            TokenType::EqualEqual => self.chunk.push_code(OpCode::Equal, token_line),
-            TokenType::Greater => self.chunk.push_code(OpCode::Greater, token_line),
-            TokenType::GreaterEqual => {
-                self.chunk.push_code(OpCode::Less, token_line);
-                self.chunk.push_code(OpCode::Not, token_line);
-            }
-            TokenType::Less => self.chunk.push_code(OpCode::Less, token_line),
-            TokenType::LessEqual => {
-                self.chunk.push_code(OpCode::Greater, token_line);
-                self.chunk.push_code(OpCode::Not, token_line);
-            }
-            _ => {}
-        };
+        self.modify_chunk(|chunk| {
+            match token_type {
+                TokenType::Plus => chunk.push_code(OpCode::Add, token_line),
+                TokenType::Minus => chunk.push_code(OpCode::Subtract, token_line),
+                TokenType::Star => chunk.push_code(OpCode::Multiply, token_line),
+                TokenType::Slash => chunk.push_code(OpCode::Divide, token_line),
+                TokenType::BangEqual => {
+                    chunk.push_code(OpCode::Equal, token_line);
+                    chunk.push_code(OpCode::Not, token_line);
+                }
+                TokenType::EqualEqual => chunk.push_code(OpCode::Equal, token_line),
+                TokenType::Greater => chunk.push_code(OpCode::Greater, token_line),
+                TokenType::GreaterEqual => {
+                    chunk.push_code(OpCode::Less, token_line);
+                    chunk.push_code(OpCode::Not, token_line);
+                }
+                TokenType::Less => chunk.push_code(OpCode::Less, token_line),
+                TokenType::LessEqual => {
+                    chunk.push_code(OpCode::Greater, token_line);
+                    chunk.push_code(OpCode::Not, token_line);
+                }
+                _ => {}
+            };
+        });
         Ok(())
     }
 
     fn and_operator(&mut self) -> CompilationResult {
         let line = self.current_token().line;
         let jump = self.emit_jump(OpCode::JumpIfFalse, line);
-        self.chunk.push_code(OpCode::Pop, line);
+        self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
 
         self.parse_precedence(Precedence::And)?;
         self.patch_jump(jump)
@@ -501,7 +543,7 @@ impl<'a> Compiler<'a> {
         let end_jump = self.emit_jump(OpCode::Jump, line);
 
         self.patch_jump(else_jump)?;
-        self.chunk.push_code(OpCode::Pop, line);
+        self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
 
         self.parse_precedence(Precedence::Or)?;
         self.patch_jump(end_jump)
@@ -514,25 +556,32 @@ impl<'a> Compiler<'a> {
             .make_slice(self.source)
             .parse()
             .expect("Invalid number parsed");
-        self.chunk.add_constant(Value::Number(number), self.previous_token().line);
+        let line = self.previous_token().line;
+        self.modify_chunk(|chunk| chunk.add_constant(Value::Number(number), line));
         Ok(())
     }
 
     fn literal(&mut self, _can_assign: bool) -> CompilationResult {
         let previous_token = self.previous_token();
         let line = previous_token.line;
-        match previous_token.token_type {
-            TokenType::True => self.chunk.push_code(OpCode::True, line),
-            TokenType::False => self.chunk.push_code(OpCode::False, line),
-            TokenType::Nil => self.chunk.push_code(OpCode::Nil, line),
-            _ => {}
-        }
+        let token_type = previous_token.token_type;
+        self.modify_chunk(|chunk| {
+            match token_type {
+                TokenType::True => chunk.push_code(OpCode::True, line),
+                TokenType::False => chunk.push_code(OpCode::False, line),
+                TokenType::Nil => chunk.push_code(OpCode::Nil, line),
+                _ => {}
+            }
+        });
         Ok(())
     }
 
     fn string(&mut self, _can_assign: bool) -> CompilationResult {
         let object = self.intern_string();
-        self.chunk.add_constant(Value::String(object), self.previous_token().line);
+        let line = self.previous_token().line;
+        self.modify_chunk(|chunk| {
+            chunk.add_constant(Value::String(object), line);
+        });
         Ok(())
     }
 
@@ -542,12 +591,16 @@ impl<'a> Compiler<'a> {
             self.advance()?;
             self.expression()?;
             let line = self.previous_token().line;
-            self.chunk.push_code(set_code, line);
-            self.chunk.push(index, line);
+            self.modify_chunk(|chunk| {
+                chunk.push_code(set_code, line);
+                chunk.push(index, line);
+            });
         } else {
             let line = self.previous_token().line;
-            self.chunk.push_code(get_code, line);
-            self.chunk.push(index, line);
+            self.modify_chunk(|chunk| {
+                chunk.push_code(get_code, line);
+                chunk.push(index, line);
+            });
         }
         Ok(())
     }
@@ -563,7 +616,9 @@ impl<'a> Compiler<'a> {
                     Some(index) => *index,
                     None => {
                         let string = Rc::clone(&object);
-                        let index = self.chunk.push_constant_to_pool(Value::String(object)) as u8;
+                        let index = self.modify_chunk(|chunk| {
+                            chunk.push_constant_to_pool(Value::String(object)) as u8
+                        });
                         self.string_constants.insert(string, index);
                         index
                     }
@@ -592,7 +647,8 @@ impl<'a> Compiler<'a> {
 
     #[inline]
     fn push_code(&mut self, code: OpCode) {
-        self.chunk.push_code(code, self.current_token().line);
+        let line = self.current_token().line;
+        self.modify_chunk(|chunk| chunk.push_code(code, line));
     }
 
     fn synchronize(&mut self) {

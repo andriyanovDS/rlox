@@ -2,9 +2,7 @@ use super::value::Value;
 use super::vec::Vec;
 use super::op_code::OpCode;
 use super::constant_pool::ConstantPool;
-use super::object_string::ObjectString;
 use std::mem;
-use std::rc::Rc;
 use std::slice::Iter;
 
 pub struct Chunk {

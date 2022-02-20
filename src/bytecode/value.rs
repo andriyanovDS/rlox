@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Formatter};
 use std::cmp::PartialEq;
 use std::rc::Rc;
+use super::object_function::ObjectFunction;
 use super::object_string::ObjectString;
 
 #[derive(Clone)]
@@ -9,6 +10,7 @@ pub enum Value {
     Bool(bool),
     Nil,
     String(Rc<ObjectString>),
+    Function(Rc<ObjectFunction>),
 }
 
 impl Default for Value {
@@ -24,6 +26,9 @@ impl PartialEq for Value {
             (Value::String(left), Value::String(right)) => {
                 Rc::as_ptr(left) == Rc::as_ptr(right)
             },
+            (Value::Function(left), Value::Function(right)) => {
+                Rc::as_ptr(left) == Rc::as_ptr(right)
+            }
             _ => false
         }
     }
@@ -35,7 +40,8 @@ impl Debug for Value {
             Value::Bool(boolean) => write!(formatter, "{}", boolean),
             Value::Number(number) => write!(formatter, "{}", number),
             Value::String(object) => write!(formatter, "{:?}", object.as_ref().value),
-            Value::Nil => write!(formatter, "Nil")
+            Value::Function(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().name),
+            Value::Nil => write!(formatter, "Nil"),
         }
     }
 }
