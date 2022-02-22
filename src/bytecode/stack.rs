@@ -1,6 +1,8 @@
+use super::virtual_machine::FRAMES_SIZE;
 use super::value::Value;
 
-const STACK_SIZE: usize = 256;
+const U8_MAX: usize = u8::MAX as usize + 1;
+const STACK_SIZE: usize = FRAMES_SIZE * U8_MAX;
 const NOT_INITIALIZED: Value = Value::Nil;
 pub struct Stack {
     buffer: [Value; STACK_SIZE],

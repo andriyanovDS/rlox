@@ -10,32 +10,40 @@ use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
 
+pub const FRAMES_SIZE: usize = 64;
 pub struct VirtualMachine {
     stack: Stack,
     interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
     globals: HashTable<Rc<ObjectString>, Value>,
+    frame_count: usize,
 }
 
 impl VirtualMachine {
-    pub fn new(interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>) -> Self {
+    pub fn new(interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>, ) -> Self {
          Self {
-            stack: Stack::new(),
+             stack: Stack::new(),
              interned_strings,
              globals: HashTable::new(),
+             frame_count: 0,
         }
     }
 
     pub fn interpret(&mut self, function_type: &FunctionType) -> InterpretResult {
-        match function_type {
-            FunctionType::Script(chunk) => self.handle_chunk(chunk),
+        match &function_type {
+            FunctionType::Script(chunk) => {
+                self.handle_chunk(chunk, 0)
+            },
             FunctionType::Function(func) => {
-                self.handle_chunk(&func.as_ref().borrow().chunk)
+                self.handle_chunk(&func.as_ref().borrow().chunk, 0)
             }
         }
-
     }
 
-    fn handle_chunk(&mut self, chunk: &Chunk) -> InterpretResult {
+    fn handle_chunk(&mut self, chunk: &Chunk, slots_start: usize) -> InterpretResult {
+        self.frame_count += 1;
+        if self.frame_count == FRAMES_SIZE {
+            return Err(InterpretError);
+        }
         let mut iter = chunk.codes.iter();
         let mut offset: usize = 0;
         loop {
@@ -69,8 +77,8 @@ impl VirtualMachine {
                     OpCode::DefineGlobal => self.define_global_variable(chunk, &mut iter),
                     OpCode::GetGlobal => self.get_global_variable(chunk, &mut iter, offset)?,
                     OpCode::SetGlobal => self.set_global_variable(chunk, &mut iter, offset)?,
-                    OpCode::GetLocal => self.get_local_variable(&mut iter),
-                    OpCode::SetLocal => self.set_local_variable(&mut iter),
+                    OpCode::GetLocal => self.get_local_variable(&mut iter, slots_start),
+                    OpCode::SetLocal => self.set_local_variable(&mut iter, slots_start),
                     OpCode::JumpIfFalse => self.handle_jump_if_false(&mut iter, &mut offset),
                     OpCode::Jump => {
                         let jump_offset = Chunk::read_condition_offset(&mut iter);
@@ -105,7 +113,7 @@ impl VirtualMachine {
             }
             _ => {
                 self.runtime_error("Operands must be numbers.".to_string(), offset, chunk);
-                Err(InterpretError::RuntimeError)
+                Err(InterpretError)
             }
         }
     }
@@ -125,7 +133,7 @@ impl VirtualMachine {
             }
             _ => {
                 self.runtime_error("Operands must be two numbers or two strings.".to_string(), offset, chunk);
-                Err(InterpretError::RuntimeError)
+                Err(InterpretError)
             }
         }
     }
@@ -143,7 +151,7 @@ impl VirtualMachine {
             }
             _ => {
                 self.runtime_error("Operands must be numbers.".to_string(), offset, chunk);
-                Err(InterpretError::RuntimeError)
+                Err(InterpretError)
             }
         }
     }
@@ -156,7 +164,7 @@ impl VirtualMachine {
             Ok(())
         } else {
             self.runtime_error("Operand must be a number.".to_string(), offset, chunk);
-            Err(InterpretError::RuntimeError)
+            Err(InterpretError)
         }
     }
 
@@ -205,7 +213,7 @@ impl VirtualMachine {
                 None => {
                     let variable = &object.as_ref().value;
                     self.runtime_error(format!("Undefined variable {:?}", variable), offset, chunk);
-                    Err(InterpretError::RuntimeError)
+                    Err(InterpretError)
                 }
             }
         } else {
@@ -224,7 +232,7 @@ impl VirtualMachine {
             if !self.globals.contains(object) {
                 let variable = &object.as_ref().value;
                 self.runtime_error(format!("Undefined variable {:?}", variable), offset, chunk);
-                Err(InterpretError::RuntimeError)
+                Err(InterpretError)
             } else {
                 let value = self.stack.peek_end(0).unwrap();
                 self.globals.insert(Rc::clone(object), value.clone());
@@ -236,16 +244,16 @@ impl VirtualMachine {
     }
 
     #[inline]
-    fn get_local_variable(&mut self, iter: &mut Iter<u8>) {
+    fn get_local_variable(&mut self, iter: &mut Iter<u8>, slots_start: usize) {
         let index = *(iter.next().unwrap()) as usize;
-        self.stack.push(self.stack.copy_value(index));
+        self.stack.push(self.stack.copy_value(slots_start + index));
     }
 
     #[inline]
-    fn set_local_variable(&mut self, iter: &mut Iter<u8>) {
+    fn set_local_variable(&mut self, iter: &mut Iter<u8>, slots_start: usize) {
         let index = *(iter.next().unwrap()) as usize;
         let value = self.stack.peek_end(0).unwrap().clone();
-        self.stack.modify_at_index(index, value);
+        self.stack.modify_at_index(slots_start + index, value);
     }
 
     #[inline]
@@ -267,9 +275,5 @@ impl VirtualMachine {
 }
 
 #[derive(Debug)]
-pub enum InterpretError {
-    CompileError,
-    RuntimeError,
-}
-
+pub struct InterpretError;
 pub type InterpretResult = Result<(), InterpretError>;
