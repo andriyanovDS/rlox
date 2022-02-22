@@ -5,6 +5,7 @@ use super::op_code::OpCode;
 use super::chunk::Chunk;
 use super::hash_table::HashTable;
 use super::object_string::ObjectString;
+use super::object_function::FunctionType;
 use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
@@ -24,9 +25,19 @@ impl VirtualMachine {
         }
     }
 
-    pub fn interpret(&mut self, chunk: &Chunk) -> InterpretResult {
-        let mut offset: usize = 0;
+    pub fn interpret(&mut self, function_type: &FunctionType) -> InterpretResult {
+        match function_type {
+            FunctionType::Script(chunk) => self.handle_chunk(chunk),
+            FunctionType::Function(func) => {
+                self.handle_chunk(&func.as_ref().borrow().chunk)
+            }
+        }
+
+    }
+
+    fn handle_chunk(&mut self, chunk: &Chunk) -> InterpretResult {
         let mut iter = chunk.codes.iter();
+        let mut offset: usize = 0;
         loop {
             if let Some(code) = iter.next() {
                 let op_code = Chunk::byte_to_op_code(*code);
@@ -76,7 +87,6 @@ impl VirtualMachine {
                     }
                 }
             } else {
-                self.stack.print_debug_info();
                 break Ok(());
             }
         }

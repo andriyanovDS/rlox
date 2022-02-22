@@ -45,11 +45,13 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn compile(&mut self) -> &FunctionType {
+    pub fn compile(&mut self) -> Option<&FunctionType> {
         if let Err(error) = self.start_compilation() {
             self.handle_error(&error);
+            None
+        } else {
+            Some(&self.function_type)
         }
-        &self.function_type
     }
 
     fn start_compilation(&mut self) -> CompilationResult {

@@ -27,10 +27,10 @@ pub fn run_interpreter(script: String) {
     );
 
     let mut compiler = Compiler::new(&script, Rc::clone(&interned_strings));
-    compiler.compile();
-
-    let mut virtual_machine = VirtualMachine::new(Rc::clone(&interned_strings));
-    if let Err(error) = virtual_machine.interpret(compiler.chunk()) {
-        eprintln!("Interpret failed with error {:?}", error);
+    if let Some(function_type) = compiler.compile() {
+        let mut virtual_machine = VirtualMachine::new(Rc::clone(&interned_strings));
+        if let Err(error) = virtual_machine.interpret(function_type) {
+            eprintln!("Interpret failed with error {:?}", error);
+        }
     }
 }
