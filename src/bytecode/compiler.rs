@@ -1,5 +1,7 @@
 use std::cell::{RefCell};
+use std::mem;
 use std::rc::Rc;
+use super::object_function::ObjectFunction;
 use super::object_function::{FunctionType};
 use super::scope::Scope;
 use super::hash_table::HashTable;
@@ -14,43 +16,70 @@ use super::scanner::Scanner;
 use super::parse_rule::{ParseType, Precedence, ParseRule};
 
 pub struct Compiler<'a> {
-    scanner: Scanner<'a>,
+    scanner: Rc<RefCell<Scanner<'a>>>,
     interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
-    string_constants: HashTable<Rc<ObjectString>, u8>,
+    string_constants: Rc<RefCell<HashTable<Rc<ObjectString>, u8>>>,
     scope: Scope,
     source: &'a str,
-    function_type: FunctionType,
-    parse_rules: [ParseRule<'a>; 39],
+    chunk: Chunk,
+    parse_rules: &'a [ParseRule<'a>; 39],
     previous_token: Option<Token>,
     current_token: Option<Token>,
     loop_context: Option<LoopContext>,
 }
 
-impl<'a> Compiler<'a> {
+pub struct CompilerContext<'a> {
+    scanner: Rc<RefCell<Scanner<'a>>>,
+    source: &'a str,
+    parse_rules: &'a [ParseRule<'a>; 39],
+    interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
+    string_constants: Rc<RefCell<HashTable<Rc<ObjectString>, u8>>>,
+    previous_token: Option<Token>,
+    current_token: Option<Token>,
+}
+
+impl<'a> CompilerContext<'a>  {
     pub fn new(
+        scanner: Rc<RefCell<Scanner<'a>>>,
         source: &'a str,
-        interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>
+        parse_rules: &'a [ParseRule<'a>; 39],
+        string_constants: Rc<RefCell<HashTable<Rc<ObjectString>, u8>>>,
+        interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
     ) -> Self {
         Self {
-            scanner: Scanner::new(source),
-            interned_strings,
-            string_constants: HashTable::new(),
-            scope: Scope::new(),
+            scanner,
             source,
-            function_type: FunctionType::Script(Chunk::new()),
-            parse_rules: Compiler::make_parse_rules(),
+            parse_rules,
+            interned_strings,
+            string_constants,
             previous_token: None,
             current_token: None,
+        }
+    }
+}
+
+impl<'a> Compiler<'a> {
+    pub fn new(context: CompilerContext<'a>) -> Self {
+        Self {
+            scanner: context.scanner,
+            interned_strings: context.interned_strings,
+            string_constants: context.string_constants,
+            scope: Scope::new(),
+            source: context.source,
+            chunk: Chunk::new(),
+            parse_rules: context.parse_rules,
+            previous_token: context.previous_token,
+            current_token: context.current_token,
             loop_context: None,
         }
     }
 
-    pub fn compile(&mut self) -> Option<&FunctionType> {
+    pub fn compile(&mut self) -> Option<&Chunk> {
         if let Err(error) = self.start_compilation() {
             self.handle_error(&error);
             None
         } else {
-            Some(&self.function_type)
+            Some(&self.chunk)
         }
     }
 
@@ -74,30 +103,21 @@ impl<'a> Compiler<'a> {
 
     #[inline]
     fn modify_chunk<F, R>(&mut self, callback: F) -> R where F: FnOnce(&mut Chunk) -> R {
-        match &mut self.function_type {
-            FunctionType::Script(chunk) => {
-                callback(chunk)
-            },
-            FunctionType::Function(func) => {
-                let mut func = func.as_ref().borrow_mut();
-                callback(&mut func.chunk)
-            },
-        }
+        callback(&mut self.chunk)
     }
 
     #[inline]
     fn current_chunk_size(&self) -> usize {
-        match &self.function_type {
-            FunctionType::Script(chunk) => chunk.codes.length,
-            FunctionType::Function(func) => {
-                func.as_ref().borrow().chunk.codes.length
-            },
-        }
+        self.chunk.codes.length
     }
 
     fn advance(&mut self) -> CompilationResult {
         self.previous_token = self.current_token.take();
-        let token = self.scanner.scan_token().map_err(CompileError::ScanError)?;
+        let token = self.scanner
+            .as_ref()
+            .borrow_mut()
+            .scan_token()
+            .map_err(CompileError::ScanError)?;
         self.current_token = Some(token);
         Ok(())
     }
@@ -117,11 +137,17 @@ impl<'a> Compiler<'a> {
 
     #[inline]
     fn declaration(&mut self) -> CompilationResult {
-        if self.current_token().token_type == TokenType::Var {
-            self.advance()?;
-            self.variable_declaration()
-        } else {
-            self.statement()
+        let token_type = self.current_token().token_type;
+        match token_type {
+            TokenType::Var => {
+                self.advance()?;
+                self.variable_declaration()
+            }
+            TokenType::Fun => {
+                self.advance()?;
+                self.function_declaration()
+            }
+            _ => self.statement()
         }
     }
 
@@ -154,16 +180,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn variable_declaration(&mut self) -> CompilationResult {
-        self.parse_variable("Expect variable name.")?;
-        let index = if self.scope.is_global_scope() {
-            let object = self.intern_string();
-            self.modify_chunk(|chunk| {
-                chunk.push_constant_to_pool(Value::String(object))
-            })
-        } else {
-            self.declare_local_variable()?;
-            0
-        };
+        let index = self.parse_variable("Expect variable name.")?;
         let line = self.previous_token().line;
         if self.current_token().token_type == TokenType::Equal {
             self.advance()?;
@@ -172,14 +189,7 @@ impl<'a> Compiler<'a> {
             self.modify_chunk(|chunk| chunk.push_code(OpCode::Nil, line));
         }
         self.consume(TokenType::Semicolon, "Expect ';' after variable declaration.")?;
-        if self.scope.is_global_scope() {
-            self.modify_chunk(|chunk| {
-                chunk.push_code(OpCode::DefineGlobal, line);
-                chunk.push(index as u8, line);
-            });
-        } else {
-            self.scope.mark_local_initialized();
-        }
+        self.define_variable(index, line);
         Ok(())
     }
 
@@ -194,13 +204,89 @@ impl<'a> Compiler<'a> {
     }
 
     #[inline]
-    fn parse_variable(&mut self, error_message: &'static str) -> CompilationResult {
-        if self.current_token().token_type == TokenType::Identifier {
-            self.advance()?;
-            Ok(())
-        } else {
-            Err(CompileError::make_from_token(self.current_token(), error_message))
+    fn parse_variable(&mut self, error_message: &'static str) -> Result<Option<usize>, CompileError> {
+        if self.current_token().token_type != TokenType::Identifier {
+            return Err(CompileError::make_from_token(self.current_token(), error_message));
         }
+        self.advance()?;
+        if self.scope.is_global_scope() {
+            let object = self.intern_string();
+            let index = self.modify_chunk(|chunk| {
+                chunk.push_constant_to_pool(Value::String(object))
+            });
+            Ok(Some(index))
+        } else {
+            self.declare_local_variable()?;
+            Ok(None)
+        }
+    }
+
+    #[inline]
+    fn define_variable(&mut self, global_index: Option<usize>, line: usize) {
+        match global_index {
+            Some(index) => {
+                self.modify_chunk(|chunk| {
+                    chunk.push_code(OpCode::DefineGlobal, line);
+                    chunk.push(index as u8, line);
+                });
+            }
+            None => {
+                self.scope.mark_local_initialized();
+            }
+        }
+    }
+
+    #[inline]
+    fn function_declaration(&mut self) -> CompilationResult {
+        let global_index = self.parse_variable("Expect function name.")?;
+        let line = self.current_token().line;
+        if global_index.is_none() {
+            self.scope.mark_local_initialized();
+        }
+        self.compile_function()?;
+        self.define_variable(global_index, line);
+        Ok(())
+    }
+
+    fn compile_function(&mut self) -> CompilationResult {
+        let function_name = self.intern_string();
+        let function_name_line = self.previous_token().line;
+
+        let compiler_context = CompilerContext {
+            scanner: Rc::clone(&self.scanner),
+            source: self.source,
+            parse_rules: self.parse_rules,
+            string_constants: Rc::clone(&self.string_constants),
+            interned_strings: Rc::clone(&self.interned_strings),
+            previous_token: self.previous_token.clone(),
+            current_token: self.current_token.clone(),
+        };
+        let mut compiler = Compiler::new(compiler_context);
+        compiler.parse_function()?;
+        let line = self.previous_token().line;
+        self.end_compiler(line);
+        self.previous_token = compiler.previous_token.clone();
+        self.current_token = compiler.current_token.clone();
+
+        let function = ObjectFunction {
+            name: function_name,
+            arity: 0,
+            chunk: mem::replace(&mut compiler.chunk, Chunk::new()),
+        };
+        self.chunk.add_constant(
+            Value::Function(Rc::new(function)),
+            function_name_line
+        );
+        Ok(())
+    }
+
+    fn parse_function(&mut self) -> CompilationResult {
+        self.scope.begin_scope();
+        self.consume(TokenType::LeftParen, "Expect '(' after function name.")?;
+        self.consume(TokenType::RightParen, "Expect ')' after parameters.")?;
+        self.consume(TokenType::LeftBrace, "Expect '{' before function body.")?;
+        self.block_statement()?;
+        Ok(())
     }
 
     #[inline]
@@ -614,14 +700,17 @@ impl<'a> Compiler<'a> {
             Some(index) => Ok((OpCode::SetLocal, OpCode::GetLocal, index)),
             None => {
                 let object = self.intern_string();
-                let index = match self.string_constants.find(&object) {
-                    Some(index) => *index,
+                let constants = self.string_constants.as_ref().borrow();
+                let index = constants.find(&object).copied();
+                drop(constants);
+                let index = match index {
+                    Some(index) => index,
                     None => {
                         let string = Rc::clone(&object);
                         let index = self.modify_chunk(|chunk| {
                             chunk.push_constant_to_pool(Value::String(object)) as u8
                         });
-                        self.string_constants.insert(string, index);
+                        self.string_constants.as_ref().borrow_mut().insert(string, index);
                         index
                     }
                 };
@@ -697,7 +786,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn make_parse_rules<'c>() -> [ParseRule<'c>; 39] {
+    pub fn make_parse_rules<'c>() -> [ParseRule<'c>; 39] {
         return [
             ParseRule {
                 parse_type: ParseType::Prefix(Compiler::grouping),

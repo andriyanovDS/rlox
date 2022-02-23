@@ -5,7 +5,6 @@ use super::op_code::OpCode;
 use super::chunk::Chunk;
 use super::hash_table::HashTable;
 use super::object_string::ObjectString;
-use super::object_function::FunctionType;
 use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
@@ -28,15 +27,8 @@ impl VirtualMachine {
         }
     }
 
-    pub fn interpret(&mut self, function_type: &FunctionType) -> InterpretResult {
-        match &function_type {
-            FunctionType::Script(chunk) => {
-                self.handle_chunk(chunk, 0)
-            },
-            FunctionType::Function(func) => {
-                self.handle_chunk(&func.as_ref().borrow().chunk, 0)
-            }
-        }
+    pub fn interpret(&mut self, chunk: &Chunk) -> InterpretResult {
+        self.handle_chunk(chunk, 0)
     }
 
     fn handle_chunk(&mut self, chunk: &Chunk, slots_start: usize) -> InterpretResult {

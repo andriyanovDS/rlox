@@ -116,6 +116,7 @@ impl Scope {
 
     #[inline]
     pub fn mark_local_initialized(&mut self) {
+        assert!(self.scope_depth > 0);
         let local = &mut self.locals[(self.locals_count - 1) as usize];
         local.depth = self.scope_depth;
     }
