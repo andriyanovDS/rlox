@@ -264,7 +264,7 @@ impl<'a> Compiler<'a> {
         let mut compiler = Compiler::new(compiler_context);
         let arity = compiler.parse_function()?;
         let line = self.previous_token().line;
-        self.end_compiler(line);
+        compiler.end_compiler(line);
         self.previous_token = compiler.previous_token.clone();
         self.current_token = compiler.current_token.clone();
 
