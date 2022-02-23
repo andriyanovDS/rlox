@@ -262,7 +262,7 @@ impl<'a> Compiler<'a> {
             current_token: self.current_token.clone(),
         };
         let mut compiler = Compiler::new(compiler_context);
-        compiler.parse_function()?;
+        let arity = compiler.parse_function()?;
         let line = self.previous_token().line;
         self.end_compiler(line);
         self.previous_token = compiler.previous_token.clone();
@@ -270,7 +270,7 @@ impl<'a> Compiler<'a> {
 
         let function = ObjectFunction {
             name: function_name,
-            arity: 0,
+            arity,
             chunk: mem::replace(&mut compiler.chunk, Chunk::new()),
         };
         self.chunk.add_constant(
@@ -280,13 +280,38 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn parse_function(&mut self) -> CompilationResult {
+    fn parse_function(&mut self) -> Result<u8, CompileError> {
         self.scope.begin_scope();
         self.consume(TokenType::LeftParen, "Expect '(' after function name.")?;
+        let arity = match self.current_token().token_type {
+            TokenType::RightParen => 0u8,
+            _ => self.parse_function_parameters()?
+        };
         self.consume(TokenType::RightParen, "Expect ')' after parameters.")?;
         self.consume(TokenType::LeftBrace, "Expect '{' before function body.")?;
         self.block_statement()?;
-        Ok(())
+        Ok(arity)
+    }
+
+    fn parse_function_parameters(&mut self) -> Result<u8, CompileError> {
+        let mut arity: u8 = 0;
+        loop {
+            if arity == u8::MAX {
+               return Err(CompileError::make_from_token(
+                   self.current_token(),
+                   "Can't have more than 255 parameters."
+               ))
+            }
+            arity += 1;
+            let index = self.parse_variable("Expect parameter name.")?;
+            self.define_variable(index, self.previous_token().line);
+            if self.current_token().token_type == TokenType::Comma {
+                self.advance()?;
+            } else {
+                break;
+            }
+        }
+        Ok(arity)
     }
 
     #[inline]
