@@ -2,7 +2,6 @@ use std::cell::{RefCell};
 use std::mem;
 use std::rc::Rc;
 use super::object_function::ObjectFunction;
-use super::object_function::{FunctionType};
 use super::scope::Scope;
 use super::hash_table::HashTable;
 use super::object_string::ObjectString;
@@ -718,6 +717,38 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    fn function_call(&mut self) -> CompilationResult {
+        let line = self.current_token().line;
+        let arguments_count = self.parse_arguments()?;
+        self.chunk.push_code(OpCode::Call, line);
+        self.chunk.push(arguments_count, line);
+        Ok(())
+    }
+
+    #[inline]
+    fn parse_arguments(&mut self) -> Result<u8, CompileError> {
+        let mut arguments_count = 0u8;
+        loop {
+            match self.current_token().token_type {
+                TokenType::RightParen => {
+                    break;
+                }
+                TokenType::Comma => {
+                    self.advance()?;
+                }
+                _ => {}
+            }
+            if arguments_count == u8::MAX {
+                let token = self.current_token();
+                return Err(CompileError::make_from_token(token, "Can't have more than 255 arguments."));
+            }
+            arguments_count += 1;
+            self.expression()?;
+        }
+        self.consume(TokenType::RightParen, "Expect ')' after arguments.")?;
+        Ok(arguments_count)
+    }
+
     #[inline]
     fn variable_operations(&mut self) -> Result<(OpCode, OpCode, u8), CompileError> {
         let local_index = self.scope.find_local(self.previous_token(), self.source)?;
@@ -814,8 +845,11 @@ impl<'a> Compiler<'a> {
     pub fn make_parse_rules<'c>() -> [ParseRule<'c>; 39] {
         return [
             ParseRule {
-                parse_type: ParseType::Prefix(Compiler::grouping),
-                precedence: Precedence::None
+                parse_type: ParseType::Both {
+                    prefix: Compiler::grouping,
+                    infix: Compiler::function_call
+                },
+                precedence: Precedence::Call
             },                                                                       // TokenType::LeftParen
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::RightParen
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::LeftBrace

@@ -17,6 +17,8 @@ impl Stack {
         }
     }
 
+    pub fn top_index(&self) -> usize { self.top_index }
+
     pub fn push(&mut self, value: Value) {
         if self.top_index == STACK_SIZE - 1 {
             panic!("Stack overflow")

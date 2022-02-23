@@ -7,11 +7,3 @@ pub struct ObjectFunction {
     pub arity: u8,
     pub chunk: Chunk,
 }
-
-pub enum FunctionType {
-    Function {
-        name: Rc<ObjectString>,
-        arity: usize,
-    },
-    Script,
-}

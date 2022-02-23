@@ -85,6 +85,7 @@ impl VirtualMachine {
                         iter.nth(offset - jump_offset - 1);
                         offset -= jump_offset;
                     }
+                    OpCode::Call => self.handle_function_call(&mut iter, chunk, offset)?,
                 }
             } else {
                 break Ok(());
@@ -258,6 +259,29 @@ impl VirtualMachine {
                 *offset += jump_offset;
             },
             _ => {},
+        }
+    }
+
+    #[inline]
+    fn handle_function_call(
+        &mut self,
+        iter: &mut Iter<u8>,
+        chunk: &Chunk,
+        offset: usize
+    ) -> InterpretResult {
+        let arguments_count = *(iter.next().unwrap()) as usize;
+        let function = self.stack.peek_end(arguments_count);
+        match function.unwrap() {
+            Value::Function(func) => {
+                let cloned_function = Rc::clone(func);
+                let slots_start = self.stack.top_index() - arguments_count;
+                self.handle_chunk(&cloned_function.as_ref().chunk, slots_start)?;
+                Ok(())
+            }
+            _ => {
+                self.runtime_error("Can only call functions and classes.".to_string(), offset, chunk);
+                Err(InterpretError)
+            }
         }
     }
 

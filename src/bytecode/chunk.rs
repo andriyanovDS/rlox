@@ -80,6 +80,10 @@ impl Chunk {
                 let condition_offset = Chunk::read_condition_offset(iter);
                 println!("{} {} {} at {}", offset, op_code, condition_offset, line)
             }
+            OpCode::Call => {
+                let argument_count = *(iter.next().unwrap());
+                println!("{} {} {} at {}", offset, op_code, argument_count, line)
+            }
         }
         offset + op_code.code_size()
     }
