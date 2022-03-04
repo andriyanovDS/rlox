@@ -33,14 +33,14 @@ impl VirtualMachine {
 
     fn handle_chunk(&mut self, chunk: &Chunk, slots_start: usize) -> InterpretResult {
         self.frame_count += 1;
-        if self.frame_count == FRAMES_SIZE {
-            return Err(InterpretError);
-        }
+        assert!(self.frame_count < FRAMES_SIZE);
+
         let mut iter = chunk.codes.iter();
         let mut offset: usize = 0;
         loop {
             if let Some(code) = iter.next() {
                 let op_code = Chunk::byte_to_op_code(*code);
+                let prev_offset = offset;
                 offset += op_code.code_size();
                 match op_code {
                     OpCode::Return => { break Ok(()); },
@@ -52,23 +52,23 @@ impl VirtualMachine {
                         let constant = chunk.read_constant_long(&mut iter);
                         self.stack.push(constant.clone());
                     },
-                    OpCode::Negate => self.apply_negate_operation(offset, chunk)?,
-                    OpCode::Add => self.apply_add_operation(offset, chunk)?,
-                    OpCode::Subtract => self.apply_binary_operation(Sub::sub, offset, chunk)?,
-                    OpCode::Multiply => self.apply_binary_operation(Mul::mul, offset, chunk)?,
-                    OpCode::Divide => self.apply_binary_operation(Div::div, offset, chunk)?,
+                    OpCode::Negate => self.apply_negate_operation(prev_offset, chunk)?,
+                    OpCode::Add => self.apply_add_operation(prev_offset, chunk)?,
+                    OpCode::Subtract => self.apply_binary_operation(Sub::sub, prev_offset, chunk)?,
+                    OpCode::Multiply => self.apply_binary_operation(Mul::mul, prev_offset, chunk)?,
+                    OpCode::Divide => self.apply_binary_operation(Div::div, prev_offset, chunk)?,
                     OpCode::True => self.stack.push(Value::Bool(true)),
                     OpCode::False => self.stack.push(Value::Bool(false)),
                     OpCode::Nil => self.stack.push(Value::Nil),
                     OpCode::Not => self.apply_not_operation(),
                     OpCode::Equal => self.apply_equal_operation(),
-                    OpCode::Greater => self.apply_compare_operation(|a, b| a > b, offset, chunk)?,
-                    OpCode::Less => self.apply_compare_operation(|a, b| a < b, offset, chunk)?,
+                    OpCode::Greater => self.apply_compare_operation(|a, b| a > b, prev_offset, chunk)?,
+                    OpCode::Less => self.apply_compare_operation(|a, b| a < b, prev_offset, chunk)?,
                     OpCode::Print => println!("{:?}", self.stack.pop().unwrap()),
                     OpCode::Pop => { self.stack.pop(); },
                     OpCode::DefineGlobal => self.define_global_variable(chunk, &mut iter),
-                    OpCode::GetGlobal => self.get_global_variable(chunk, &mut iter, offset)?,
-                    OpCode::SetGlobal => self.set_global_variable(chunk, &mut iter, offset)?,
+                    OpCode::GetGlobal => self.get_global_variable(chunk, &mut iter, prev_offset)?,
+                    OpCode::SetGlobal => self.set_global_variable(chunk, &mut iter, prev_offset)?,
                     OpCode::GetLocal => self.get_local_variable(&mut iter, slots_start),
                     OpCode::SetLocal => self.set_local_variable(&mut iter, slots_start),
                     OpCode::JumpIfFalse => self.handle_jump_if_false(&mut iter, &mut offset),
@@ -85,7 +85,7 @@ impl VirtualMachine {
                         iter.nth(offset - jump_offset - 1);
                         offset -= jump_offset;
                     }
-                    OpCode::Call => self.handle_function_call(&mut iter, chunk, offset)?,
+                    OpCode::Call => self.handle_function_call(&mut iter, chunk, prev_offset)?,
                 }
             } else {
                 break Ok(());
@@ -269,12 +269,22 @@ impl VirtualMachine {
         chunk: &Chunk,
         offset: usize
     ) -> InterpretResult {
-        let arguments_count = *(iter.next().unwrap()) as usize;
-        let function = self.stack.peek_end(arguments_count);
+        let arguments_count = *(iter.next().unwrap());
+        let arguments_count_usize = arguments_count as usize;
+        let function = self.stack.peek_end(arguments_count_usize);
         match function.unwrap() {
+            Value::Function(func) if func.arity != arguments_count => {
+                let err_message = format!("Expected {} arguments but got {}.", func.arity, arguments_count);
+                self.runtime_error(err_message, offset, chunk);
+                Err(InterpretError)
+            }
             Value::Function(func) => {
+                if self.frame_count + 1 == FRAMES_SIZE {
+                    self.runtime_error("Stack overflow.".to_string(), offset, chunk);
+                    return Err(InterpretError);
+                }
                 let cloned_function = Rc::clone(func);
-                let slots_start = self.stack.top_index() - arguments_count;
+                let slots_start = self.stack.top_index() - arguments_count_usize;
                 self.handle_chunk(&cloned_function.as_ref().chunk, slots_start)?;
                 Ok(())
             }
