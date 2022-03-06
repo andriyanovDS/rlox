@@ -1,8 +1,12 @@
 use std::fmt::{Debug, Formatter};
 use std::cmp::PartialEq;
 use std::rc::Rc;
-use super::object_function::ObjectFunction;
-use super::object_string::ObjectString;
+
+pub mod object_function;
+pub mod object_string;
+
+use object_function::ObjectFunction;
+use object_string::ObjectString;
 
 #[derive(Clone)]
 pub enum Value {

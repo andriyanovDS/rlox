@@ -1,16 +1,14 @@
 use std::cell::{RefCell};
 use std::mem;
 use std::rc::Rc;
-use super::object_function::ObjectFunction;
 use super::scope::Scope;
 use super::hash_table::HashTable;
-use super::object_string::ObjectString;
 use super::token::Lexeme;
 use super::chunk::Chunk;
 use super::op_code::OpCode;
 use super::scanner::ScanError;
 use super::token::{Token, TokenType};
-use super::value::Value;
+use super::value::{Value, object_function::ObjectFunction, object_string::ObjectString};
 use super::scanner::Scanner;
 use super::parse_rule::{ParseType, Precedence, ParseRule};
 
@@ -89,12 +87,8 @@ impl<'a> Compiler<'a> {
         }
         let line = self.previous_token().line;
         self.consume(TokenType::Eof, "Expect end of expression.")?;
-        self.end_compiler(line);
+        self.emit_return(line);
         Ok(())
-    }
-
-    fn end_compiler(&mut self, line: usize) {
-        self.modify_chunk(|chunk| chunk.push_code(OpCode::Return, line));
     }
 
     #[inline]
@@ -158,6 +152,10 @@ impl<'a> Compiler<'a> {
                 self.advance()?;
                 self.if_statement()
             }
+            TokenType::Return => {
+                self.advance()?;
+                self.return_statement()
+            }
             TokenType::While => {
                 self.advance()?;
                 self.while_statement()
@@ -172,6 +170,18 @@ impl<'a> Compiler<'a> {
             }
             TokenType::LeftBrace => self.parse_block(),
             _ => self.expression_statement()
+        }
+    }
+
+    fn return_statement(&mut self) -> CompilationResult {
+        if self.current_token().token_type == TokenType::Semicolon {
+            self.emit_return(self.current_token().line);
+            self.advance()
+        } else {
+            self.expression()?;
+            self.consume(TokenType::Semicolon, "Expect ';' after return value.");
+            self.chunk.push_code(OpCode::Return, self.previous_token().line);
+            Ok(())
         }
     }
 
@@ -259,7 +269,7 @@ impl<'a> Compiler<'a> {
         let mut compiler = Compiler::new(compiler_context);
         let arity = compiler.parse_function()?;
         let line = self.previous_token().line;
-        compiler.end_compiler(line);
+        compiler.emit_return(line);
         self.previous_token = compiler.previous_token.clone();
         self.current_token = compiler.current_token.clone();
 
@@ -779,6 +789,11 @@ impl<'a> Compiler<'a> {
             .to_string();
         let mut strings = self.interned_strings.as_ref().borrow_mut();
         strings.find_string_or_insert_new(lexeme)
+    }
+
+    fn emit_return(&mut self, line: usize) {
+        self.chunk.push_code(OpCode::Nil, line);
+        self.modify_chunk(|chunk| chunk.push_code(OpCode::Return, line));
     }
 
     #[inline]

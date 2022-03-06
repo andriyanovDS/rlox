@@ -1,10 +1,9 @@
 use std::cell::RefCell;
-use super::value::Value;
 use super::stack::Stack;
 use super::op_code::OpCode;
 use super::chunk::Chunk;
 use super::hash_table::HashTable;
-use super::object_string::ObjectString;
+use super::value::{Value, object_string::ObjectString};
 use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
@@ -44,7 +43,6 @@ impl VirtualMachine {
                 let op_code = Chunk::byte_to_op_code(*code);
                 let prev_offset = offset;
                 offset += op_code.code_size();
-
                 match op_code {
                     OpCode::Return => { break Ok(()); },
                     OpCode::Constant => {
@@ -284,7 +282,7 @@ impl VirtualMachine {
                 let cloned_function = Rc::clone(func);
                 let slots_start = self.stack.top_index() - arguments_count_usize;
                 let chunk = &cloned_function.as_ref().chunk;
-                let result =  self.handle_chunk(chunk, slots_start);
+                let result = self.handle_chunk(chunk, slots_start);
                 self.frame_count -= 1;
                 result.map_err(|_| {
                     eprintln!("[line {}] in {:?}()", chunk.line(offset), cloned_function.name);

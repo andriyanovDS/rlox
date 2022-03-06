@@ -2,14 +2,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use crate::bytecode::compiler::{Compiler, CompilerContext};
 use crate::bytecode::hash_table::HashTable;
-use crate::bytecode::object_string::ObjectString;
+use crate::bytecode::value::object_string::ObjectString;
 use crate::bytecode::scanner::Scanner;
 use crate::bytecode::virtual_machine::VirtualMachine;
 
 mod chunk;
 mod op_code;
 mod constant_pool;
-mod value;
 mod virtual_machine;
 mod stack;
 mod compiler;
@@ -18,9 +17,8 @@ mod token;
 mod parse_rule;
 mod vec;
 mod scope;
-pub mod object_string;
+mod value;
 pub mod hash_table;
-mod object_function;
 
 pub fn run_interpreter(script: String) {
     let interned_strings = Rc::new(

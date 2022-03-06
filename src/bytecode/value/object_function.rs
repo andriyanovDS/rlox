@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use super::chunk::Chunk;
+use super::super::chunk::Chunk;
 use super::object_string::ObjectString;
 
 pub struct ObjectFunction {

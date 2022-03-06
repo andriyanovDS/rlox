@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use super::hash_table::{Hashable, HashTable};
+use super::super::hash_table::{Hashable, HashTable};
 
 #[derive(Clone)]
 pub struct ObjectString {
