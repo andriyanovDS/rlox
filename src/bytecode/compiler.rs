@@ -17,7 +17,7 @@ use super::parse_rule::{ParseType, Precedence, ParseRule};
 pub struct Compiler<'a> {
     scanner: Rc<RefCell<Scanner<'a>>>,
     interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
-    string_constants: Rc<RefCell<HashTable<Rc<ObjectString>, u8>>>,
+    string_constants: HashTable<Rc<ObjectString>, u8>,
     scope: Scope,
     source: &'a str,
     chunk: Chunk,
@@ -32,7 +32,6 @@ pub struct CompilerContext<'a> {
     source: &'a str,
     parse_rules: &'a [ParseRule<'a>; 39],
     interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
-    string_constants: Rc<RefCell<HashTable<Rc<ObjectString>, u8>>>,
     previous_token: Option<Token>,
     current_token: Option<Token>,
 }
@@ -42,7 +41,6 @@ impl<'a> CompilerContext<'a>  {
         scanner: Rc<RefCell<Scanner<'a>>>,
         source: &'a str,
         parse_rules: &'a [ParseRule<'a>; 39],
-        string_constants: Rc<RefCell<HashTable<Rc<ObjectString>, u8>>>,
         interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
     ) -> Self {
         Self {
@@ -50,7 +48,6 @@ impl<'a> CompilerContext<'a>  {
             source,
             parse_rules,
             interned_strings,
-            string_constants,
             previous_token: None,
             current_token: None,
         }
@@ -62,7 +59,7 @@ impl<'a> Compiler<'a> {
         Self {
             scanner: context.scanner,
             interned_strings: context.interned_strings,
-            string_constants: context.string_constants,
+            string_constants: HashTable::new(),
             scope: Scope::new(),
             source: context.source,
             chunk: Chunk::new(),
@@ -255,7 +252,6 @@ impl<'a> Compiler<'a> {
             scanner: Rc::clone(&self.scanner),
             source: self.source,
             parse_rules: self.parse_rules,
-            string_constants: Rc::clone(&self.string_constants),
             interned_strings: Rc::clone(&self.interned_strings),
             previous_token: self.previous_token.clone(),
             current_token: self.current_token.clone(),
@@ -756,9 +752,7 @@ impl<'a> Compiler<'a> {
             Some(index) => Ok((OpCode::SetLocal, OpCode::GetLocal, index)),
             None => {
                 let object = self.intern_string();
-                let constants = self.string_constants.as_ref().borrow();
-                let index = constants.find(&object).copied();
-                drop(constants);
+                let index = self.string_constants.find(&object).copied();
                 let index = match index {
                     Some(index) => index,
                     None => {
@@ -766,7 +760,7 @@ impl<'a> Compiler<'a> {
                         let index = self.modify_chunk(|chunk| {
                             chunk.push_constant_to_pool(Value::String(object)) as u8
                         });
-                        self.string_constants.as_ref().borrow_mut().insert(string, index);
+                        self.string_constants.insert(string, index);
                         index
                     }
                 };

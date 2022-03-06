@@ -28,22 +28,16 @@ pub fn run_interpreter(script: String) {
     );
 
     let scanner = Rc::new(RefCell::new(Scanner::new(&script)));
-    let string_constants: Rc<RefCell<HashTable<Rc<ObjectString>, u8>>> = Rc::new(
-        RefCell::new(HashTable::new())
-    );
     let parse_rules = Compiler::make_parse_rules();
     let compiler_context = CompilerContext::new(
         Rc::clone(&scanner),
         &script,
         &parse_rules,
-        Rc::clone(&string_constants),
         Rc::clone(&interned_strings)
     );
     let mut compiler = Compiler::new(compiler_context);
     if let Some(chunk) = compiler.compile() {
         let mut virtual_machine = VirtualMachine::new(Rc::clone(&interned_strings));
-        if let Err(error) = virtual_machine.interpret(chunk) {
-            eprintln!("Interpret failed with error {:?}", error);
-        }
+        virtual_machine.interpret(chunk);
     }
 }

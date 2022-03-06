@@ -27,8 +27,10 @@ impl VirtualMachine {
         }
     }
 
-    pub fn interpret(&mut self, chunk: &Chunk) -> InterpretResult {
-        self.handle_chunk(chunk, 0)
+    pub fn interpret(&mut self, chunk: &Chunk) {
+        if let Err(error) = self.handle_chunk(chunk, 0) {
+            eprintln!("[line {}] in script", chunk.line(error.0))
+        }
     }
 
     fn handle_chunk(&mut self, chunk: &Chunk, slots_start: usize) -> InterpretResult {
@@ -42,6 +44,7 @@ impl VirtualMachine {
                 let op_code = Chunk::byte_to_op_code(*code);
                 let prev_offset = offset;
                 offset += op_code.code_size();
+
                 match op_code {
                     OpCode::Return => { break Ok(()); },
                     OpCode::Constant => {
@@ -52,18 +55,18 @@ impl VirtualMachine {
                         let constant = chunk.read_constant_long(&mut iter);
                         self.stack.push(constant.clone());
                     },
-                    OpCode::Negate => self.apply_negate_operation(prev_offset, chunk)?,
-                    OpCode::Add => self.apply_add_operation(prev_offset, chunk)?,
-                    OpCode::Subtract => self.apply_binary_operation(Sub::sub, prev_offset, chunk)?,
-                    OpCode::Multiply => self.apply_binary_operation(Mul::mul, prev_offset, chunk)?,
-                    OpCode::Divide => self.apply_binary_operation(Div::div, prev_offset, chunk)?,
+                    OpCode::Negate => self.apply_negate_operation(prev_offset)?,
+                    OpCode::Add => self.apply_add_operation(prev_offset)?,
+                    OpCode::Subtract => self.apply_binary_operation(Sub::sub, prev_offset)?,
+                    OpCode::Multiply => self.apply_binary_operation(Mul::mul, prev_offset)?,
+                    OpCode::Divide => self.apply_binary_operation(Div::div, prev_offset)?,
                     OpCode::True => self.stack.push(Value::Bool(true)),
                     OpCode::False => self.stack.push(Value::Bool(false)),
                     OpCode::Nil => self.stack.push(Value::Nil),
                     OpCode::Not => self.apply_not_operation(),
                     OpCode::Equal => self.apply_equal_operation(),
-                    OpCode::Greater => self.apply_compare_operation(|a, b| a > b, prev_offset, chunk)?,
-                    OpCode::Less => self.apply_compare_operation(|a, b| a < b, prev_offset, chunk)?,
+                    OpCode::Greater => self.apply_compare_operation(|a, b| a > b, prev_offset)?,
+                    OpCode::Less => self.apply_compare_operation(|a, b| a < b, prev_offset)?,
                     OpCode::Print => println!("{:?}", self.stack.pop().unwrap()),
                     OpCode::Pop => { self.stack.pop(); },
                     OpCode::DefineGlobal => self.define_global_variable(chunk, &mut iter),
@@ -85,7 +88,7 @@ impl VirtualMachine {
                         iter.nth(offset - jump_offset - 1);
                         offset -= jump_offset;
                     }
-                    OpCode::Call => self.handle_function_call(&mut iter, chunk, prev_offset)?,
+                    OpCode::Call => self.handle_function_call(&mut iter, prev_offset)?,
                 }
             } else {
                 break Ok(());
@@ -96,8 +99,7 @@ impl VirtualMachine {
     fn apply_binary_operation<F>(
         &mut self,
         operation: F,
-        offset: usize,
-        chunk: &Chunk,
+        offset: usize
     ) -> InterpretResult where F: FnOnce(f32, f32) -> f32 {
         match (self.stack.pop(), self.stack.pop()) {
             (Some(Value::Number(right)), Some(Value::Number(left))) => {
@@ -105,13 +107,12 @@ impl VirtualMachine {
                 Ok(())
             }
             _ => {
-                self.runtime_error("Operands must be numbers.".to_string(), offset, chunk);
-                Err(InterpretError)
+                Err(VirtualMachine::runtime_error("Operands must be numbers.".to_string(), offset))
             }
         }
     }
 
-    fn apply_add_operation(&mut self, offset: usize, chunk: &Chunk) -> InterpretResult {
+    fn apply_add_operation(&mut self, offset: usize) -> InterpretResult {
         match (self.stack.pop().unwrap(), self.stack.pop().unwrap()) {
             (Value::Number(right), Value::Number(left)) => {
                 self.stack.push(Value::Number(left + right));
@@ -125,8 +126,7 @@ impl VirtualMachine {
                 Ok(())
             }
             _ => {
-                self.runtime_error("Operands must be two numbers or two strings.".to_string(), offset, chunk);
-                Err(InterpretError)
+                Err(VirtualMachine::runtime_error("Operands must be two numbers or two strings.".to_string(), offset))
             }
         }
     }
@@ -135,7 +135,6 @@ impl VirtualMachine {
         &mut self,
         operation: F,
         offset: usize,
-        chunk: &Chunk,
     ) -> InterpretResult where F: FnOnce(f32, f32) -> bool {
         match (self.stack.pop().unwrap(), self.stack.pop().unwrap()) {
             (Value::Number(right), Value::Number(left)) => {
@@ -143,21 +142,19 @@ impl VirtualMachine {
                 Ok(())
             }
             _ => {
-                self.runtime_error("Operands must be numbers.".to_string(), offset, chunk);
-                Err(InterpretError)
+                Err(VirtualMachine::runtime_error("Operands must be numbers.".to_string(), offset))
             }
         }
     }
 
-    fn apply_negate_operation(&mut self, offset: usize, chunk: &Chunk) -> InterpretResult {
+    fn apply_negate_operation(&mut self, offset: usize) -> InterpretResult {
         let top_value = self.stack.peek_end(0).unwrap();
         if let Value::Number(number) = top_value {
             let new_number = -(*number);
             self.stack.modify_last(Value::Number(new_number));
             Ok(())
         } else {
-            self.runtime_error("Operand must be a number.".to_string(), offset, chunk);
-            Err(InterpretError)
+            Err(VirtualMachine::runtime_error("Operand must be a number.".to_string(), offset))
         }
     }
 
@@ -205,8 +202,7 @@ impl VirtualMachine {
                 }
                 None => {
                     let variable = &object.as_ref().value;
-                    self.runtime_error(format!("Undefined variable {:?}", variable), offset, chunk);
-                    Err(InterpretError)
+                    Err(VirtualMachine::runtime_error(format!("Undefined variable {:?}", variable), offset))
                 }
             }
         } else {
@@ -224,8 +220,7 @@ impl VirtualMachine {
         if let Value::String(object) = chunk.read_constant(iter) {
             if !self.globals.contains(object) {
                 let variable = &object.as_ref().value;
-                self.runtime_error(format!("Undefined variable {:?}", variable), offset, chunk);
-                Err(InterpretError)
+                Err(VirtualMachine::runtime_error(format!("Undefined variable {:?}", variable), offset))
             } else {
                 let value = self.stack.peek_end(0).unwrap();
                 self.globals.insert(Rc::clone(object), value.clone());
@@ -266,40 +261,48 @@ impl VirtualMachine {
     fn handle_function_call(
         &mut self,
         iter: &mut Iter<u8>,
-        chunk: &Chunk,
         offset: usize
     ) -> InterpretResult {
         let arguments_count = *(iter.next().unwrap());
         let arguments_count_usize = arguments_count as usize;
         let function = self.stack.peek_end(arguments_count_usize);
+
         match function.unwrap() {
             Value::Function(func) if func.arity != arguments_count => {
-                let err_message = format!("Expected {} arguments but got {}.", func.arity, arguments_count);
-                self.runtime_error(err_message, offset, chunk);
-                Err(InterpretError)
+                let err_message = format!(
+                    "{:?} function expects {} arguments but got {}.",
+                    func.name,
+                    func.arity,
+                    arguments_count
+                );
+                Err(VirtualMachine::runtime_error(err_message, offset))
             }
             Value::Function(func) => {
                 if self.frame_count + 1 == FRAMES_SIZE {
-                    self.runtime_error("Stack overflow.".to_string(), offset, chunk);
-                    return Err(InterpretError);
+                    return Err(VirtualMachine::runtime_error("Stack overflow.".to_string(), offset));
                 }
                 let cloned_function = Rc::clone(func);
                 let slots_start = self.stack.top_index() - arguments_count_usize;
-                self.handle_chunk(&cloned_function.as_ref().chunk, slots_start)?;
-                Ok(())
+                let chunk = &cloned_function.as_ref().chunk;
+                let result =  self.handle_chunk(chunk, slots_start);
+                self.frame_count -= 1;
+                result.map_err(|_| {
+                    eprintln!("[line {}] in {:?}()", chunk.line(offset), cloned_function.name);
+                    InterpretError(offset)
+                })
             }
             _ => {
-                self.runtime_error("Can only call functions and classes.".to_string(), offset, chunk);
-                Err(InterpretError)
+                Err(VirtualMachine::runtime_error("Can only call functions and classes.".to_string(), offset))
             }
         }
     }
 
-    fn runtime_error(&mut self, message: String, offset: usize, chunk: &Chunk) {
-        eprintln!("[line {}] in script. {}", chunk.line(offset), message);
+    fn runtime_error(message: String, offset: usize) -> InterpretError {
+        eprintln!("{}", message);
+        InterpretError(offset)
     }
 }
 
 #[derive(Debug)]
-pub struct InterpretError;
+pub struct InterpretError(usize);
 pub type InterpretResult = Result<(), InterpretError>;
