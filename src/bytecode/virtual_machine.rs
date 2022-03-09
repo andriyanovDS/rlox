@@ -283,6 +283,11 @@ impl VirtualMachine {
                 let slots_start = self.stack.top_index() - arguments_count_usize;
                 let chunk = &cloned_function.as_ref().chunk;
                 let result = self.handle_chunk(chunk, slots_start);
+                let return_value = self.stack.pop().unwrap();
+                while self.stack.top_index() > slots_start {
+                    self.stack.pop();
+                }
+                self.stack.push(return_value);
                 self.frame_count -= 1;
                 result.map_err(|_| {
                     eprintln!("[line {}] in {:?}()", chunk.line(offset), cloned_function.name);
