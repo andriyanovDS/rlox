@@ -2,6 +2,7 @@ mod raw_table;
 
 use raw_table::{RawTable, Entry, EntryType};
 use std::cmp::PartialEq;
+use super::value::object_string::ObjectString;
 pub use raw_table::Hashable;
 
 pub struct HashTable<Key: Hashable + PartialEq, Value> {

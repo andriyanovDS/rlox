@@ -310,7 +310,6 @@ impl VirtualMachine {
                 }
                 self.stack.push(return_value);
                 self.frame_count -= 1;
-                // self.stack.print_debug_info();
                 result.map_err(|_| {
                     eprintln!("[line {}] in {:?}()", chunk.line(offset), cloned_function.name);
                     InterpretError(offset)

@@ -104,14 +104,30 @@ impl<Key: Hashable + PartialEq, Value: Default> RawTable<Key, Value> {
             .into_iter()
             .map(|index| old_pointer.add(index).read())
             .fold(0, |acc, entry| {
-                let index = entry.entry_type.filled().map(|v| v.hash() % new_capacity);
-                if let Some(new_index) = index {
-                    new_pointer.add(new_index).write(entry);
-                    acc + 1
-                } else {
-                    acc
+                match entry.entry_type.filled() {
+                    Some(key) => {
+                        let index = RawTable::insert_in_empty_entry(key, new_pointer, new_capacity);
+                        new_pointer.add(index).write(entry);
+                        acc + 1
+                    }
+                    None => acc
                 }
             })
+    }
+
+    unsafe fn insert_in_empty_entry(key: &Key, pointer: &*mut Entry<Key, Value>, capacity: usize) -> usize {
+        let mut index = key.hash() % capacity;
+        loop {
+            let new_entry = pointer.add(index).as_ref().unwrap();
+            match new_entry.entry_type {
+                EntryType::Empty => {
+                    return index;
+                },
+                _ => {
+                    index = (index + 1) % capacity;
+                }
+            }
+        }
     }
 }
 
