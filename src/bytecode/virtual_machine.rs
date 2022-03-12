@@ -1,12 +1,14 @@
-use std::cell::RefCell;
+use std::cell::{RefCell};
 use super::stack::Stack;
 use super::op_code::OpCode;
 use super::chunk::Chunk;
 use super::hash_table::HashTable;
 use super::value::{Value, object_string::ObjectString};
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
+use super::value::object_native_function::ObjectNativeFunction;
 
 pub const FRAMES_SIZE: usize = 64;
 pub struct VirtualMachine {
@@ -18,11 +20,13 @@ pub struct VirtualMachine {
 
 impl VirtualMachine {
     pub fn new(interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>, ) -> Self {
-         Self {
-             stack: Stack::new(),
-             interned_strings,
-             globals: HashTable::new(),
-             frame_count: 0,
+        let mut globals = HashTable::new();
+        VirtualMachine::add_native_functions(&mut globals, &interned_strings);
+        Self {
+            stack: Stack::new(),
+            interned_strings,
+            globals,
+            frame_count: 0,
         }
     }
 
@@ -30,6 +34,23 @@ impl VirtualMachine {
         if let Err(error) = self.handle_chunk(chunk, 0) {
             eprintln!("[line {}] in script", chunk.line(error.0))
         }
+    }
+
+    fn add_native_functions(
+        globals: &mut HashTable<Rc<ObjectString>, Value>,
+        interned_strings: &Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>
+    ) {
+        let string = ObjectString::from_string("clock".to_string());
+        let rc_string = Rc::new(string);
+        let mut mut_interned_strings = interned_strings.as_ref().borrow_mut();
+        mut_interned_strings.insert(Rc::clone(&rc_string),());
+        globals.insert(Rc::clone(&rc_string), Value::NativeFunction(ObjectNativeFunction {
+            function: Box::new(|| {
+                let system_time = SystemTime::now();
+                let milliseconds = system_time.duration_since(UNIX_EPOCH).unwrap().as_millis();
+                Value::Number(milliseconds as f32)
+            })
+        }));
     }
 
     fn handle_chunk(&mut self, chunk: &Chunk, slots_start: usize) -> InterpretResult {
@@ -293,6 +314,11 @@ impl VirtualMachine {
                     eprintln!("[line {}] in {:?}()", chunk.line(offset), cloned_function.name);
                     InterpretError(offset)
                 })
+            }
+            Value::NativeFunction(object) => {
+                let result: Value = (object.function)();
+                self.stack.push(result);
+                Ok(())
             }
             _ => {
                 Err(VirtualMachine::runtime_error("Can only call functions and classes.".to_string(), offset))

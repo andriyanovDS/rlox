@@ -4,9 +4,11 @@ use std::rc::Rc;
 
 pub mod object_function;
 pub mod object_string;
+pub mod object_native_function;
 
 use object_function::ObjectFunction;
 use object_string::ObjectString;
+use object_native_function::ObjectNativeFunction;
 
 #[derive(Clone)]
 pub enum Value {
@@ -15,6 +17,7 @@ pub enum Value {
     Nil,
     String(Rc<ObjectString>),
     Function(Rc<ObjectFunction>),
+    NativeFunction(ObjectNativeFunction)
 }
 
 impl Default for Value {
@@ -45,6 +48,7 @@ impl Debug for Value {
             Value::Number(number) => write!(formatter, "{}", number),
             Value::String(object) => write!(formatter, "{:?}", object.as_ref().value),
             Value::Function(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().name),
+            Value::NativeFunction(_) => write!(formatter, "<native fn>"),
             Value::Nil => write!(formatter, "Nil"),
         }
     }
