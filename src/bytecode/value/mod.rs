@@ -36,6 +36,9 @@ impl PartialEq for Value {
             (Value::Function(left), Value::Function(right)) => {
                 Rc::as_ptr(left) == Rc::as_ptr(right)
             }
+            (Value::NativeFunction(left), Value::NativeFunction(right)) => {
+                *(left.function) == *(right.function)
+            }
             _ => false
         }
     }
