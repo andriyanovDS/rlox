@@ -8,7 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
-use crate::bytecode::value::object_closure::ObjectClosure;
+use super::value::object_closure::ObjectClosure;
+use super::value::object_function::ObjectFunction;
 use super::value::object_native_function::ObjectNativeFunction;
 
 pub const FRAMES_SIZE: usize = 64;
@@ -289,34 +290,17 @@ impl VirtualMachine {
         let function = self.stack.peek_end(arguments_count_usize);
 
         match function.unwrap() {
-            Value::Function(func) if func.arity != arguments_count => {
-                let err_message = format!(
-                    "{:?} function expects {} arguments but got {}.",
-                    func.name,
-                    func.arity,
-                    arguments_count
-                );
-                Err(VirtualMachine::runtime_error(err_message, offset))
+            Value::Closure(closure) if closure.function.arity != arguments_count => {
+                let func = &closure.function;
+                Err(VirtualMachine::runtime_error(
+                    format!("{:?} function expects {} arguments but got {}.", func.name, func.arity, arguments_count),
+                    offset
+                ))
             }
-            Value::Function(func) => {
-                if self.frame_count + 1 == FRAMES_SIZE {
-                    return Err(VirtualMachine::runtime_error("Stack overflow.".to_string(), offset));
-                }
-                let cloned_function = Rc::clone(func);
-                let slots_start = self.stack.top_index() - arguments_count_usize;
-                let chunk = &cloned_function.as_ref().chunk;
-                let result = self.handle_chunk(chunk, slots_start);
-                let return_value = self.stack.pop().unwrap();
-                while self.stack.top_index() + 1 > slots_start {
-                    self.stack.pop();
-                }
-                self.stack.push(return_value);
-                self.frame_count -= 1;
-                result.map_err(|_| {
-                    eprintln!("[line {}] in {:?}()", chunk.line(offset), cloned_function.name);
-                    InterpretError(offset)
-                })
-            }
+            Value::Closure(closure) => {
+                let closure = Rc::clone(closure);
+                self.call_closure(&closure, arguments_count_usize, offset)
+            },
             Value::NativeFunction(object) => {
                 let result: Value = (object.function)();
                 self.stack.push(result);
@@ -340,6 +324,28 @@ impl VirtualMachine {
         }
     }
 
+    #[inline]
+    fn call_closure(&mut self, closure: &ObjectClosure, arguments_count: usize, offset: usize) -> InterpretResult {
+        if self.frame_count + 1 == FRAMES_SIZE {
+            return Err(VirtualMachine::runtime_error("Stack overflow.".to_string(), offset));
+        }
+        let cloned_function = Rc::clone(&closure.function);
+        let slots_start = self.stack.top_index() - arguments_count;
+        let chunk = &cloned_function.as_ref().chunk;
+        let result = self.handle_chunk(chunk, slots_start);
+        let return_value = self.stack.pop().unwrap();
+        while self.stack.top_index() + 1 > slots_start {
+            self.stack.pop();
+        }
+        self.stack.push(return_value);
+        self.frame_count -= 1;
+        result.map_err(|_| {
+            eprintln!("[line {}] in {:?}()", chunk.line(offset), cloned_function.name);
+            InterpretError(offset)
+        })
+    }
+
+    #[inline]
     fn runtime_error(message: String, offset: usize) -> InterpretError {
         eprintln!("{}", message);
         InterpretError(offset)
