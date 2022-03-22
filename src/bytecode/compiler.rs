@@ -278,10 +278,9 @@ impl<'a> Compiler<'a> {
             arity,
             chunk: mem::replace(&mut compiler.chunk, Chunk::new()),
         };
-        self.chunk.add_constant(
-            Value::Function(Rc::new(function)),
-            function_name_line
-        );
+        let constant_index = self.chunk.push_constant_to_pool(Value::Function(Rc::new(function)));
+        self.chunk.push_code(OpCode::Closure, function_name_line);
+        self.chunk.push(constant_index as u8, function_name_line);
         Ok(())
     }
 

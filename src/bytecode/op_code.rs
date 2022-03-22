@@ -28,12 +28,13 @@ pub enum OpCode {
     Jump,
     Loop,
     Call,
+    Closure,
 }
 
 impl OpCode {
     pub fn code_size(&self) -> usize {
         match self {
-            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal
+            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::Closure
             | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal | OpCode::Call => 2,
             OpCode::JumpIfFalse | OpCode::Loop | OpCode::Jump => 3,
             OpCode::ConstantLong => 4,
@@ -71,6 +72,7 @@ impl Display for OpCode {
             OpCode::Jump => write!(f, "OP_JUMP"),
             OpCode::Loop => write!(f, "OP_LOOP"),
             OpCode::Call => write!(f, "OP_CALL"),
+            OpCode::Closure => write!(f, "OP_CLOSURE"),
         }
     }
 }

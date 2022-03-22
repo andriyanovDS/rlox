@@ -5,10 +5,12 @@ use std::rc::Rc;
 pub mod object_function;
 pub mod object_string;
 pub mod object_native_function;
+pub mod object_closure;
 
 use object_function::ObjectFunction;
 use object_string::ObjectString;
 use object_native_function::ObjectNativeFunction;
+use object_closure::ObjectClosure;
 
 #[derive(Clone)]
 pub enum Value {
@@ -17,7 +19,8 @@ pub enum Value {
     Nil,
     String(Rc<ObjectString>),
     Function(Rc<ObjectFunction>),
-    NativeFunction(ObjectNativeFunction)
+    NativeFunction(ObjectNativeFunction),
+    Closure(Rc<ObjectClosure>),
 }
 
 impl Default for Value {
@@ -38,6 +41,9 @@ impl PartialEq for Value {
             }
             (Value::NativeFunction(left), Value::NativeFunction(right)) => {
                 *(left.function) == *(right.function)
+            },
+            (Value::Closure(left), Value::Closure(right)) => {
+                Rc::as_ptr(left) == Rc::as_ptr(right)
             }
             _ => false
         }
@@ -52,6 +58,7 @@ impl Debug for Value {
             Value::String(object) => write!(formatter, "{:?}", object.as_ref().value),
             Value::Function(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().name),
             Value::NativeFunction(_) => write!(formatter, "<native fn>"),
+            Value::Closure(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().function.name),
             Value::Nil => write!(formatter, "Nil"),
         }
     }

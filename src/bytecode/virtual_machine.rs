@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
+use crate::bytecode::value::object_closure::ObjectClosure;
 use super::value::object_native_function::ObjectNativeFunction;
 
 pub const FRAMES_SIZE: usize = 64;
@@ -108,6 +109,7 @@ impl VirtualMachine {
                         offset -= jump_offset;
                     }
                     OpCode::Call => self.handle_function_call(&mut iter, prev_offset)?,
+                    OpCode::Closure => self.read_closure(chunk, &mut iter),
                 }
             } else {
                 break Ok(());
@@ -323,6 +325,18 @@ impl VirtualMachine {
             _ => {
                 Err(VirtualMachine::runtime_error("Can only call functions and classes.".to_string(), offset))
             }
+        }
+    }
+
+    fn read_closure(&mut self, chunk: &Chunk, iter: &mut Iter<u8>) {
+        match chunk.read_constant(iter) {
+            Value::Function(function) => {
+                let closure = ObjectClosure {
+                    function: Rc::clone(function)
+                };
+                self.stack.push(Value::Closure(Rc::new(closure)))
+            }
+            _ => panic!("Unexpected value found instead of ObjectFunction")
         }
     }
 
