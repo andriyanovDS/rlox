@@ -19,18 +19,24 @@ struct Local {
 }
 
 pub struct Scope {
+    enclosing_scope: Option<Box<Scope>>,
     locals: [Local; STACK_SIZE],
     locals_count: u8,
     scope_depth: u8,
 }
 
 impl Scope {
-    pub fn new() -> Self {
+    pub const fn new(enclosing_scope: Option<Box<Scope>>) -> Self {
         Self {
+            enclosing_scope,
             locals: [NOT_INITIALIZED; STACK_SIZE],
             locals_count: 0,
             scope_depth: 0,
         }
+    }
+
+    pub fn take_enclosing_scope(&mut self) -> Option<Scope> {
+        self.enclosing_scope.take().map(|v| *v)
     }
 
     pub fn current_scope_depth(&self) -> u8 { self.scope_depth }
@@ -83,6 +89,21 @@ impl Scope {
             return Ok(Some(end_index - index as u8));
         }
         Ok(None)
+    }
+
+    #[inline]
+    pub fn find_local_in_enclosing(&self, token: &Token, source: &str) -> Result<Option<u8>, CompileError> {
+        match self.enclosing_scope {
+            None => Ok(None),
+            Some(ref scope) => {
+                let option = scope.find_local(token, source)?;
+                if option.is_some() {
+                    Ok(option)
+                } else {
+                    scope.find_local_in_enclosing(token, source)
+                }
+            }
+        }
     }
 
     #[inline]

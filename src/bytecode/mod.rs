@@ -18,6 +18,7 @@ mod parse_rule;
 mod vec;
 mod scope;
 mod value;
+mod upvalue;
 pub mod hash_table;
 
 pub fn run_interpreter(script: String) {
@@ -31,7 +32,8 @@ pub fn run_interpreter(script: String) {
         Rc::clone(&scanner),
         &script,
         &parse_rules,
-        Rc::clone(&interned_strings)
+        Rc::clone(&interned_strings),
+        None,
     );
     let mut compiler = Compiler::new(compiler_context);
     if let Some(chunk) = compiler.compile() {

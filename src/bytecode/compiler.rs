@@ -1,6 +1,8 @@
 use std::cell::{RefCell};
 use std::mem;
 use std::rc::Rc;
+use super::upvalue::Upvalues;
+use super::value::Value::Bool;
 use super::scope::Scope;
 use super::hash_table::HashTable;
 use super::token::Lexeme;
@@ -11,6 +13,8 @@ use super::token::{Token, TokenType};
 use super::value::{Value, object_function::ObjectFunction, object_string::ObjectString};
 use super::scanner::Scanner;
 use super::parse_rule::{ParseType, Precedence, ParseRule};
+
+const STUB_SCOPE: Scope = Scope::new(None);
 
 pub struct Compiler<'a> {
     scanner: Rc<RefCell<Scanner<'a>>>,
@@ -23,6 +27,7 @@ pub struct Compiler<'a> {
     previous_token: Option<Token>,
     current_token: Option<Token>,
     loop_context: Option<LoopContext>,
+    upvalues: Upvalues,
 }
 
 pub struct CompilerContext<'a> {
@@ -32,6 +37,7 @@ pub struct CompilerContext<'a> {
     interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
     previous_token: Option<Token>,
     current_token: Option<Token>,
+    enclosing_scope: Option<Scope>,
 }
 
 impl<'a> CompilerContext<'a>  {
@@ -40,6 +46,7 @@ impl<'a> CompilerContext<'a>  {
         source: &'a str,
         parse_rules: &'a [ParseRule<'a>; 39],
         interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
+        enclosing_scope: Option<Scope>,
     ) -> Self {
         Self {
             scanner,
@@ -48,6 +55,7 @@ impl<'a> CompilerContext<'a>  {
             interned_strings,
             previous_token: None,
             current_token: None,
+            enclosing_scope
         }
     }
 }
@@ -58,13 +66,14 @@ impl<'a> Compiler<'a> {
             scanner: context.scanner,
             interned_strings: context.interned_strings,
             string_constants: HashTable::new(),
-            scope: Scope::new(),
+            scope: Scope::new(context.enclosing_scope.map(Box::new)),
             source: context.source,
             chunk: Chunk::new(),
             parse_rules: context.parse_rules,
             previous_token: context.previous_token,
             current_token: context.current_token,
             loop_context: None,
+            upvalues: Upvalues::new(),
         }
     }
 
@@ -265,17 +274,21 @@ impl<'a> Compiler<'a> {
             interned_strings: Rc::clone(&self.interned_strings),
             previous_token: self.previous_token.clone(),
             current_token: self.current_token.clone(),
+            enclosing_scope: Some(mem::replace(&mut self.scope, STUB_SCOPE))
         };
         let mut compiler = Compiler::new(compiler_context);
         let arity = compiler.parse_function()?;
         let line = self.previous_token().line;
         compiler.emit_return(line);
+
         self.previous_token = compiler.previous_token.clone();
         self.current_token = compiler.current_token.clone();
+        self.scope = compiler.scope.take_enclosing_scope().unwrap();
 
         let function = ObjectFunction {
             name: function_name,
             arity,
+            upvalue_count: compiler.upvalues.size(),
             chunk: mem::replace(&mut compiler.chunk, Chunk::new()),
         };
         let constant_index = self.chunk.push_constant_to_pool(Value::Function(Rc::new(function)));
@@ -776,6 +789,24 @@ impl<'a> Compiler<'a> {
                 Ok((OpCode::SetGlobal, OpCode::GetGlobal, index))
             }
         }
+    }
+
+    #[inline]
+    fn resolve_upvalue(&mut self) -> Result<Option<u8>, CompileError> {
+        let local_index = self.scope.find_local_in_enclosing(self.previous_token(), self.source)?;
+        if let Some(index) = local_index {
+            self.add_upvalue(index);
+        }
+        match local_index {
+            None => Ok(None),
+            Some(index) => Ok(Some(self.add_upvalue(index)))
+        }
+    }
+
+    fn add_upvalue(&mut self, local_index: u8) -> u8 {
+        let size = self.upvalues.size();
+        self.upvalues.push(local_index, true);
+        size
     }
 
     #[inline]
