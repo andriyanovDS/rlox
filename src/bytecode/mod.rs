@@ -26,14 +26,11 @@ pub fn run_interpreter(script: String) {
         RefCell::new(HashTable::<Rc<ObjectString>, ()>::new())
     );
 
-    let scanner = Rc::new(RefCell::new(Scanner::new(&script)));
     let parse_rules = Compiler::make_parse_rules();
     let compiler_context = CompilerContext::new(
-        Rc::clone(&scanner),
         &script,
         &parse_rules,
         Rc::clone(&interned_strings),
-        None,
     );
     let mut compiler = Compiler::new(compiler_context);
     if let Some(chunk) = compiler.compile() {

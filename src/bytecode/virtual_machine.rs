@@ -9,7 +9,6 @@ use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
 use super::value::object_closure::ObjectClosure;
-use super::value::object_function::ObjectFunction;
 use super::value::object_native_function::ObjectNativeFunction;
 
 pub const FRAMES_SIZE: usize = 64;
@@ -95,6 +94,8 @@ impl VirtualMachine {
                     OpCode::SetGlobal => self.set_global_variable(chunk, &mut iter, prev_offset)?,
                     OpCode::GetLocal => self.get_local_variable(&mut iter, slots_start),
                     OpCode::SetLocal => self.set_local_variable(&mut iter, slots_start),
+                    OpCode::GetUpvalue => self.get_upvalue(&mut iter, slots_start),
+                    OpCode::SetUpvalue => self.set_upvalue(&mut iter, slots_start),
                     OpCode::JumpIfFalse => self.handle_jump_if_false(&mut iter, &mut offset),
                     OpCode::Jump => {
                         let jump_offset = Chunk::read_condition_offset(&mut iter);
@@ -264,6 +265,16 @@ impl VirtualMachine {
         let index = *(iter.next().unwrap()) as usize;
         let value = self.stack.peek_end(0).unwrap().clone();
         self.stack.modify_at_index(slots_start + index, value);
+    }
+
+    #[inline]
+    fn get_upvalue(&mut self, iter: &mut Iter<u8>, slots_start: usize) {
+
+    }
+
+    #[inline]
+    fn set_upvalue(&mut self, iter: &mut Iter<u8>, slots_start: usize) {
+
     }
 
     #[inline]

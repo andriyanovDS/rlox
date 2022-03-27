@@ -1,5 +1,8 @@
+use std::cell::RefCell;
 use std::iter::Rev;
+use std::rc::Rc;
 use std::slice::Iter;
+use crate::bytecode::upvalue::Upvalues;
 use super::compiler::{CompilationResult, CompileError};
 use super::token::{Token, TokenType};
 
@@ -19,24 +22,30 @@ struct Local {
 }
 
 pub struct Scope {
-    enclosing_scope: Option<Box<Scope>>,
+    enclosing_scope: Option<Rc<RefCell<Scope>>>,
+    upvalues: Upvalues,
     locals: [Local; STACK_SIZE],
     locals_count: u8,
     scope_depth: u8,
 }
 
 impl Scope {
-    pub const fn new(enclosing_scope: Option<Box<Scope>>) -> Self {
+    pub const fn new(enclosing_scope: Option<Rc<RefCell<Scope>>>) -> Self {
         Self {
             enclosing_scope,
+            upvalues: Upvalues::new(),
             locals: [NOT_INITIALIZED; STACK_SIZE],
             locals_count: 0,
             scope_depth: 0,
         }
     }
 
-    pub fn take_enclosing_scope(&mut self) -> Option<Scope> {
-        self.enclosing_scope.take().map(|v| *v)
+    pub fn take_enclosing_scope(&mut self) -> Option<Rc<RefCell<Scope>>> {
+        self.enclosing_scope.take()
+    }
+
+    pub fn upvalues_size(&self) -> u8 {
+        self.upvalues.size()
     }
 
     pub fn current_scope_depth(&self) -> u8 { self.scope_depth }
@@ -92,17 +101,34 @@ impl Scope {
     }
 
     #[inline]
-    pub fn find_local_in_enclosing(&self, token: &Token, source: &str) -> Result<Option<u8>, CompileError> {
-        match self.enclosing_scope {
+    pub fn resolve_upvalue(
+        &mut self,
+        token: &Token,
+        source: &str
+    ) -> Result<Option<u8>, CompileError> {
+        match &self.enclosing_scope {
             None => Ok(None),
-            Some(ref scope) => {
-                let option = scope.find_local(token, source)?;
-                if option.is_some() {
-                    Ok(option)
-                } else {
-                    scope.find_local_in_enclosing(token, source)
+            Some(scope) => {
+                let mut scope = scope.as_ref().borrow_mut();
+                match scope.find_local(token, source)? {
+                    Some(index) => {
+                        self.add_upvalue(token, index, true)
+                    },
+                    None => {
+                        scope.resolve_upvalue(token, source)?
+                            .map(|index| self.add_upvalue(token, index, false))
+                            .unwrap_or_else(|| Ok(None))
+                    }
                 }
             }
+        }
+    }
+
+    #[inline]
+    fn add_upvalue(&mut self, token: &Token, index: u8, is_local: bool) -> Result<Option<u8>, CompileError> {
+        match self.upvalues.push(index, is_local) {
+            None => Err(CompileError::make_from_token(token, "Too many closure variables in function.")),
+            Some(index) => Ok(Some(index))
         }
     }
 

@@ -1,8 +1,6 @@
-use std::cell::{RefCell};
+use std::cell::{Ref, RefCell, RefMut};
 use std::mem;
 use std::rc::Rc;
-use super::upvalue::Upvalues;
-use super::value::Value::Bool;
 use super::scope::Scope;
 use super::hash_table::HashTable;
 use super::token::Lexeme;
@@ -14,20 +12,17 @@ use super::value::{Value, object_function::ObjectFunction, object_string::Object
 use super::scanner::Scanner;
 use super::parse_rule::{ParseType, Precedence, ParseRule};
 
-const STUB_SCOPE: Scope = Scope::new(None);
-
 pub struct Compiler<'a> {
     scanner: Rc<RefCell<Scanner<'a>>>,
     interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
     string_constants: HashTable<Rc<ObjectString>, u8>,
-    scope: Scope,
+    scope: Rc<RefCell<Scope>>,
     source: &'a str,
     chunk: Chunk,
     parse_rules: &'a [ParseRule<'a>; 39],
     previous_token: Option<Token>,
     current_token: Option<Token>,
     loop_context: Option<LoopContext>,
-    upvalues: Upvalues,
 }
 
 pub struct CompilerContext<'a> {
@@ -37,25 +32,23 @@ pub struct CompilerContext<'a> {
     interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
     previous_token: Option<Token>,
     current_token: Option<Token>,
-    enclosing_scope: Option<Scope>,
+    enclosing_scope: Rc<RefCell<Scope>>,
 }
 
 impl<'a> CompilerContext<'a>  {
     pub fn new(
-        scanner: Rc<RefCell<Scanner<'a>>>,
         source: &'a str,
         parse_rules: &'a [ParseRule<'a>; 39],
         interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
-        enclosing_scope: Option<Scope>,
     ) -> Self {
         Self {
-            scanner,
+            scanner: Rc::new(RefCell::new(Scanner::new(source))),
             source,
             parse_rules,
             interned_strings,
             previous_token: None,
             current_token: None,
-            enclosing_scope
+            enclosing_scope: Rc::new(RefCell::new(Scope::new(None)))
         }
     }
 }
@@ -66,14 +59,13 @@ impl<'a> Compiler<'a> {
             scanner: context.scanner,
             interned_strings: context.interned_strings,
             string_constants: HashTable::new(),
-            scope: Scope::new(context.enclosing_scope.map(Box::new)),
+            scope: context.enclosing_scope,
             source: context.source,
             chunk: Chunk::new(),
             parse_rules: context.parse_rules,
             previous_token: context.previous_token,
             current_token: context.current_token,
             loop_context: None,
-            upvalues: Upvalues::new(),
         }
     }
 
@@ -108,6 +100,16 @@ impl<'a> Compiler<'a> {
     #[inline]
     fn current_chunk_size(&self) -> usize {
         self.chunk.codes.length
+    }
+
+    #[inline]
+    fn scope(&self) -> Ref<Scope> {
+        self.scope.as_ref().borrow()
+    }
+
+    #[inline]
+    fn scope_mut(&self) -> RefMut<Scope> {
+        self.scope.as_ref().borrow_mut()
     }
 
     fn advance(&mut self) -> CompilationResult {
@@ -188,7 +190,7 @@ impl<'a> Compiler<'a> {
             self.advance()
         } else {
             self.expression()?;
-            self.consume(TokenType::Semicolon, "Expect ';' after return value.");
+            self.consume(TokenType::Semicolon, "Expect ';' after return value.")?;
             self.chunk.push_code(OpCode::Return, self.previous_token().line);
             Ok(())
         }
@@ -209,12 +211,13 @@ impl<'a> Compiler<'a> {
     }
 
     fn declare_local_variable(&mut self) -> CompilationResult {
-        assert!(!self.scope.is_global_scope());
+        let mut scope = self.scope_mut();
+        assert!(!scope.is_global_scope());
         let token = self.previous_token().clone();
-        if self.scope.is_redeclaration(&token, self.source) {
+        if scope.is_redeclaration(&token, self.source) {
             Err(CompileError::make_from_token(&token, "Already a variable with this name in this scope."))
         } else {
-            self.scope.add_local(token)
+            scope.add_local(token)
         }
     }
 
@@ -224,7 +227,7 @@ impl<'a> Compiler<'a> {
             return Err(CompileError::make_from_token(self.current_token(), error_message));
         }
         self.advance()?;
-        if self.scope.is_global_scope() {
+        if self.scope().is_global_scope() {
             let object = self.intern_string();
             let index = self.modify_chunk(|chunk| {
                 chunk.push_constant_to_pool(Value::String(object))
@@ -246,7 +249,7 @@ impl<'a> Compiler<'a> {
                 });
             }
             None => {
-                self.scope.mark_local_initialized();
+                self.scope_mut().mark_local_initialized();
             }
         }
     }
@@ -256,7 +259,7 @@ impl<'a> Compiler<'a> {
         let global_index = self.parse_variable("Expect function name.")?;
         let line = self.current_token().line;
         if global_index.is_none() {
-            self.scope.mark_local_initialized();
+            self.scope_mut().mark_local_initialized();
         }
         self.compile_function()?;
         self.define_variable(global_index, line);
@@ -274,7 +277,7 @@ impl<'a> Compiler<'a> {
             interned_strings: Rc::clone(&self.interned_strings),
             previous_token: self.previous_token.clone(),
             current_token: self.current_token.clone(),
-            enclosing_scope: Some(mem::replace(&mut self.scope, STUB_SCOPE))
+            enclosing_scope: Rc::clone(&self.scope)
         };
         let mut compiler = Compiler::new(compiler_context);
         let arity = compiler.parse_function()?;
@@ -283,12 +286,11 @@ impl<'a> Compiler<'a> {
 
         self.previous_token = compiler.previous_token.clone();
         self.current_token = compiler.current_token.clone();
-        self.scope = compiler.scope.take_enclosing_scope().unwrap();
 
         let function = ObjectFunction {
             name: function_name,
             arity,
-            upvalue_count: compiler.upvalues.size(),
+            upvalue_count: compiler.scope().upvalues_size(),
             chunk: mem::replace(&mut compiler.chunk, Chunk::new()),
         };
         let constant_index = self.chunk.push_constant_to_pool(Value::Function(Rc::new(function)));
@@ -298,7 +300,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn parse_function(&mut self) -> Result<u8, CompileError> {
-        self.scope.begin_scope();
+        self.scope_mut().begin_scope();
         self.consume(TokenType::LeftParen, "Expect '(' after function name.")?;
         let arity = match self.current_token().token_type {
             TokenType::RightParen => 0u8,
@@ -341,9 +343,10 @@ impl<'a> Compiler<'a> {
 
     fn parse_block(&mut self) -> CompilationResult {
         self.advance()?;
-        self.scope.begin_scope();
+        let mut scope = self.scope_mut();
+        scope.begin_scope();
         let result = self.block_statement();
-        let locals_count = self.scope.end_scope();
+        let locals_count = scope.end_scope();
         for _ in 0..locals_count {
             let line = self.previous_token().line;
             self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
@@ -383,7 +386,7 @@ impl<'a> Compiler<'a> {
         let previous_loop_context = self.loop_context;
         self.loop_context = Some(LoopContext {
             start_index: loop_start,
-            locals_depth: self.scope.current_scope_depth(),
+            locals_depth: self.scope().current_scope_depth(),
         });
         self.statement()?;
         self.loop_context = previous_loop_context;
@@ -395,7 +398,8 @@ impl<'a> Compiler<'a> {
     }
 
     fn for_statement(&mut self) -> CompilationResult {
-        self.scope.begin_scope();
+        let mut scope = self.scope_mut();
+        scope.begin_scope();
         let statement_line = self.current_token().line;
         self.consume(TokenType::LeftParen, "Expect '(' after 'for'.")?;
         self.initializer_clause()?;
@@ -404,14 +408,14 @@ impl<'a> Compiler<'a> {
         let mut loop_start = self.current_chunk_size();
         self.loop_context = Some(LoopContext {
             start_index: loop_start,
-            locals_depth: self.scope.current_scope_depth(),
+            locals_depth: scope.current_scope_depth(),
         });
         let exit_jump = self.condition_clause()?;
         self.increment_clause(&mut loop_start)?;
 
         self.loop_context = Some(LoopContext {
             start_index: loop_start,
-            locals_depth: self.scope.current_scope_depth(),
+            locals_depth: scope.current_scope_depth(),
         });
         self.statement()?;
         self.loop_context = previous_loop_context;
@@ -421,7 +425,7 @@ impl<'a> Compiler<'a> {
             self.patch_jump(exit_jump)?;
             self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, statement_line));
         }
-        self.scope.end_scope();
+        scope.end_scope();
         Ok(())
     }
 
@@ -545,7 +549,7 @@ impl<'a> Compiler<'a> {
         match self.loop_context {
             Some(context) => {
                 let line = token.line;
-                let locals_count = self.scope.remove_to_scope(context.locals_depth + 1);
+                let locals_count = self.scope_mut().remove_to_scope(context.locals_depth + 1);
                 for _ in 0..locals_count {
                     self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
                 }
@@ -769,10 +773,14 @@ impl<'a> Compiler<'a> {
 
     #[inline]
     fn variable_operations(&mut self) -> Result<(OpCode, OpCode, u8), CompileError> {
-        let local_index = self.scope.find_local(self.previous_token(), self.source)?;
+        let mut scope = self.scope_mut();
+        let local_index = scope.find_local(self.previous_token(), self.source)?;
         match local_index {
             Some(index) => Ok((OpCode::SetLocal, OpCode::GetLocal, index)),
             None => {
+                if let Some(upvalue_index) = scope.resolve_upvalue(self.previous_token(), self.source)? {
+                    return Ok((OpCode::SetUpvalue, OpCode::SetUpvalue, upvalue_index));
+                }
                 let object = self.intern_string();
                 let index = self.string_constants.find(&object).copied();
                 let index = match index {
@@ -789,24 +797,6 @@ impl<'a> Compiler<'a> {
                 Ok((OpCode::SetGlobal, OpCode::GetGlobal, index))
             }
         }
-    }
-
-    #[inline]
-    fn resolve_upvalue(&mut self) -> Result<Option<u8>, CompileError> {
-        let local_index = self.scope.find_local_in_enclosing(self.previous_token(), self.source)?;
-        if let Some(index) = local_index {
-            self.add_upvalue(index);
-        }
-        match local_index {
-            None => Ok(None),
-            Some(index) => Ok(Some(self.add_upvalue(index)))
-        }
-    }
-
-    fn add_upvalue(&mut self, local_index: u8) -> u8 {
-        let size = self.upvalues.size();
-        self.upvalues.push(local_index, true);
-        size
     }
 
     #[inline]

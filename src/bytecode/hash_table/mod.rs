@@ -2,7 +2,6 @@ mod raw_table;
 
 use raw_table::{RawTable, Entry, EntryType};
 use std::cmp::PartialEq;
-use super::value::object_string::ObjectString;
 pub use raw_table::Hashable;
 
 pub struct HashTable<Key: Hashable + PartialEq, Value> {
@@ -152,7 +151,7 @@ impl<Key: Hashable + PartialEq, Value: Default> Default for HashTable<Key, Value
 
 #[cfg(test)]
 mod tests {
-    use crate::bytecode::object_string::ObjectString;
+    use crate::bytecode::value::object_string::ObjectString;
     use crate::bytecode::value::Value;
     use super::*;
 
