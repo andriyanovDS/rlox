@@ -53,13 +53,13 @@ impl PartialEq for Value {
 impl Debug for Value {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Bool(boolean) => write!(formatter, "{}", boolean),
-            Value::Number(number) => write!(formatter, "{}", number),
-            Value::String(object) => write!(formatter, "{:?}", object.as_ref().value),
+            Value::Bool(boolean) => write!(formatter, "{:5}", boolean),
+            Value::Number(number) => write!(formatter, "{:5}", number),
+            Value::String(object) => write!(formatter, "{:5?}", object.as_ref().value),
             Value::Function(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().name),
             Value::NativeFunction(_) => write!(formatter, "<native fn>"),
             Value::Closure(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().function.name),
-            Value::Nil => write!(formatter, "Nil"),
+            Value::Nil => write!(formatter, "{:5}", "Nil"),
         }
     }
 }

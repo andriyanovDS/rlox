@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::iter::Rev;
 use std::rc::Rc;
 use std::slice::Iter;
-use crate::bytecode::upvalue::Upvalues;
+use super::upvalue::{Upvalues, UpvaluesRefIterator};
 use super::compiler::{CompilationResult, CompileError};
 use super::token::{Token, TokenType};
 
@@ -46,6 +46,10 @@ impl Scope {
 
     pub fn upvalues_size(&self) -> u8 {
         self.upvalues.size()
+    }
+
+    pub fn upvalues_iter(&self) -> UpvaluesRefIterator {
+        (&self.upvalues).into_iter()
     }
 
     pub fn current_scope_depth(&self) -> u8 { self.scope_depth }

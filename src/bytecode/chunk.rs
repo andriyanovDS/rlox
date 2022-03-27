@@ -27,13 +27,13 @@ impl Chunk {
         }
     }
 
-    pub fn disassemble(self, name: String) {
+    pub fn disassemble(&self, name: String) {
         println!("== {} ==", name);
         let mut iter = self.codes.iter();
         let mut offset: usize = 0;
         while let Some(code) = iter.next() {
             let op_code = Chunk::byte_to_op_code(code.clone());
-            offset += self.disassemble_instruction(&op_code, &mut iter, offset);
+            offset += self.disassemble_instruction(op_code, &mut iter, offset);
         }
     }
 
@@ -57,33 +57,50 @@ impl Chunk {
         self.constants.length() - 1
     }
 
-    pub fn disassemble_instruction(&self, op_code: &OpCode, iter: &mut Iter<u8>, offset: usize) -> usize {
+    pub fn disassemble_instruction(&self, op_code: OpCode, iter: &mut Iter<u8>, offset: usize) -> usize {
         let line = self.line(offset);
+        let mut offset = offset;
         match op_code {
             OpCode::Return | OpCode::Negate | OpCode::Add
             | OpCode::Subtract | OpCode::Multiply | OpCode::Divide
             | OpCode::False | OpCode::True | OpCode::Nil
             | OpCode::Not | OpCode::Equal | OpCode::Greater
             | OpCode::Less | OpCode::Print | OpCode::Pop => {
-                println!("{} {} at {}", offset, op_code, line);
+                println!("{:04} {:4} {} at {}", offset, "", op_code, line);
             }
             OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal
-            | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal | OpCode::Closure
+            | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal
             | OpCode::GetUpvalue | OpCode::SetUpvalue => {
-                let value = self.read_constant(iter);
-                println!("{} {} {:?} at {}", offset, op_code, value, line);
+                print!("{:04} ", offset);
+                self.print_constant(iter, op_code, line);
             }
             OpCode::ConstantLong => {
                 let value = self.read_constant_long(iter);
-                println!("{} {} {:?} at {}", offset, op_code, value, line);
+                println!("{:04} {} {:?} at {}", offset, op_code, value, line);
             }
             OpCode::JumpIfFalse | OpCode::Jump | OpCode::Loop => {
                 let condition_offset = Chunk::read_condition_offset(iter);
-                println!("{} {} {} at {}", offset, op_code, condition_offset, line)
+                println!("{:04} {} {} at {}", offset, op_code, condition_offset, line)
             }
             OpCode::Call => {
                 let argument_count = *(iter.next().unwrap());
-                println!("{} {} {} at {}", offset, op_code, argument_count, line)
+                println!("{:04} {} {} at {}", offset, op_code, argument_count, line)
+            }
+            OpCode::Closure => {
+                print!("{:04} ", offset);
+                let value = self.print_constant(iter, op_code, line);
+                offset += op_code.code_size();
+                if let Value::Closure(closure) = value {
+                    let count = closure.function.upvalue_count;
+                    for _ in 0..count {
+                        let is_local = *(iter.next().unwrap());
+                        let index = *(iter.next().unwrap());
+                        let locality = if is_local == 1 { "local" } else { "upvalue" };
+                        println!("{:04}      |                     {} {}", offset, locality, index);
+                        offset += 2;
+                    }
+                }
+                return offset;
             }
         }
         offset + op_code.code_size()
@@ -147,6 +164,14 @@ impl Chunk {
             self.push(((index >> 8u8) & 0xff) as u8, line);
             self.push(((index >> 8u8) & 0xff) as u8, line);
         }
+    }
+
+    #[inline]
+    fn print_constant(&self, iterator: &mut Iter<u8>, op_code: OpCode, line: usize) -> &Value {
+        let index = *iterator.next().unwrap() as usize;
+        let constant = self.constants.value(index);
+        println!("{:4} {} {:>16?} at {}", index, op_code, constant, line);
+        constant
     }
 }
 

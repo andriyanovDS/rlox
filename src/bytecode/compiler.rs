@@ -297,6 +297,10 @@ impl<'a> Compiler<'a> {
         let constant_index = self.chunk.push_constant_to_pool(Value::Function(Rc::new(function)));
         self.chunk.push_code(OpCode::Closure, function_name_line);
         self.chunk.push(constant_index as u8, function_name_line);
+        for upvalue in compiler.scope().upvalues_iter() {
+            self.chunk.push(if upvalue.is_local { 1 } else { 0 }, function_name_line);
+            self.chunk.push(upvalue.index, function_name_line);
+        }
         Ok(())
     }
 

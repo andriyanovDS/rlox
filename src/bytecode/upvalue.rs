@@ -9,7 +9,7 @@ const NOT_INITIALIZED: Upvalue = Upvalue {
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct Upvalue {
     pub index: u8,
-    is_local: bool,
+    pub is_local: bool,
 }
 
 pub struct Upvalues {

@@ -1,11 +1,13 @@
 mod raw_val_iter;
 mod raw_vec;
+mod raw_ref_iter;
 
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::ptr;
 use std::{slice, mem};
 use std::iter;
+use super::vec::raw_ref_iter::RawRefIter;
 use super::vec::raw_val_iter::RawValIter;
 use super::vec::raw_vec::RawVec;
 
@@ -145,6 +147,17 @@ impl<Element> DoubleEndedIterator for IntoIter<Element> {
 impl<Element> Drop for IntoIter<Element> {
     fn drop(&mut self) {
         for _ in &mut *self {}
+    }
+}
+
+impl<'a, Element> iter::IntoIterator for &'a Vec<Element> {
+    type Item = &'a Element;
+    type IntoIter = RawRefIter<'a, Element>;
+
+    fn into_iter(self) -> RawRefIter<'a, Element> {
+        unsafe {
+            RawRefIter::new(&self)
+        }
     }
 }
 

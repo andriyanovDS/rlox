@@ -58,6 +58,8 @@ impl VirtualMachine {
         self.frame_count += 1;
         assert!(self.frame_count < FRAMES_SIZE);
 
+        chunk.disassemble(format!("{}", slots_start));
+
         let mut iter = chunk.codes.iter();
         let mut offset: usize = 0;
         loop {
