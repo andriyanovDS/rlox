@@ -287,10 +287,11 @@ impl<'a> Compiler<'a> {
         self.previous_token = compiler.previous_token.clone();
         self.current_token = compiler.current_token.clone();
 
+        let upvalue_count = compiler.scope().upvalues_size();
         let function = ObjectFunction {
             name: function_name,
             arity,
-            upvalue_count: compiler.scope().upvalues_size(),
+            upvalue_count,
             chunk: mem::replace(&mut compiler.chunk, Chunk::new()),
         };
         let constant_index = self.chunk.push_constant_to_pool(Value::Function(Rc::new(function)));
@@ -343,10 +344,9 @@ impl<'a> Compiler<'a> {
 
     fn parse_block(&mut self) -> CompilationResult {
         self.advance()?;
-        let mut scope = self.scope_mut();
-        scope.begin_scope();
+        self.scope_mut().begin_scope();
         let result = self.block_statement();
-        let locals_count = scope.end_scope();
+        let locals_count = self.scope_mut().end_scope();
         for _ in 0..locals_count {
             let line = self.previous_token().line;
             self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
@@ -384,9 +384,10 @@ impl<'a> Compiler<'a> {
         self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, condition_line));
 
         let previous_loop_context = self.loop_context;
+        let locals_depth = self.scope().current_scope_depth();
         self.loop_context = Some(LoopContext {
             start_index: loop_start,
-            locals_depth: self.scope().current_scope_depth(),
+            locals_depth,
         });
         self.statement()?;
         self.loop_context = previous_loop_context;
@@ -398,24 +399,25 @@ impl<'a> Compiler<'a> {
     }
 
     fn for_statement(&mut self) -> CompilationResult {
-        let mut scope = self.scope_mut();
-        scope.begin_scope();
+        self.scope_mut().begin_scope();
         let statement_line = self.current_token().line;
         self.consume(TokenType::LeftParen, "Expect '(' after 'for'.")?;
         self.initializer_clause()?;
 
         let previous_loop_context = self.loop_context;
         let mut loop_start = self.current_chunk_size();
+        let locals_depth = self.scope().current_scope_depth();
         self.loop_context = Some(LoopContext {
             start_index: loop_start,
-            locals_depth: scope.current_scope_depth(),
+            locals_depth,
         });
         let exit_jump = self.condition_clause()?;
         self.increment_clause(&mut loop_start)?;
 
+        let locals_depth = self.scope().current_scope_depth();
         self.loop_context = Some(LoopContext {
             start_index: loop_start,
-            locals_depth: scope.current_scope_depth(),
+            locals_depth,
         });
         self.statement()?;
         self.loop_context = previous_loop_context;
@@ -425,7 +427,7 @@ impl<'a> Compiler<'a> {
             self.patch_jump(exit_jump)?;
             self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, statement_line));
         }
-        scope.end_scope();
+        self.scope_mut().end_scope();
         Ok(())
     }
 
@@ -773,12 +775,11 @@ impl<'a> Compiler<'a> {
 
     #[inline]
     fn variable_operations(&mut self) -> Result<(OpCode, OpCode, u8), CompileError> {
-        let mut scope = self.scope_mut();
-        let local_index = scope.find_local(self.previous_token(), self.source)?;
+        let local_index = self.scope().find_local(self.previous_token(), self.source)?;
         match local_index {
             Some(index) => Ok((OpCode::SetLocal, OpCode::GetLocal, index)),
             None => {
-                if let Some(upvalue_index) = scope.resolve_upvalue(self.previous_token(), self.source)? {
+                if let Some(upvalue_index) = self.scope_mut().resolve_upvalue(self.previous_token(), self.source)? {
                     return Ok((OpCode::SetUpvalue, OpCode::SetUpvalue, upvalue_index));
                 }
                 let object = self.intern_string();

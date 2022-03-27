@@ -112,12 +112,17 @@ impl Scope {
                 let mut scope = scope.as_ref().borrow_mut();
                 match scope.find_local(token, source)? {
                     Some(index) => {
+                        drop(scope);
                         self.add_upvalue(token, index, true)
                     },
                     None => {
-                        scope.resolve_upvalue(token, source)?
-                            .map(|index| self.add_upvalue(token, index, false))
-                            .unwrap_or_else(|| Ok(None))
+                        match scope.resolve_upvalue(token, source)? {
+                            Some(index) => {
+                                drop(scope);
+                                self.add_upvalue(token, index, false)
+                            }
+                            None => Ok(None)
+                        }
                     }
                 }
             }
