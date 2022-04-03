@@ -31,6 +31,7 @@ pub enum OpCode {
     Loop,
     Call,
     Closure,
+    CloseUpvalue,
 }
 
 impl OpCode {
@@ -78,6 +79,7 @@ impl Display for OpCode {
             OpCode::Loop => "OP_LOOP",
             OpCode::Call => "OP_CALL",
             OpCode::Closure => "OP_CLOSURE",
+            OpCode::CloseUpvalue => "OP_CLOSE_UPVALUE"
         };
         write!(f, "{:<16}", representation)
     }

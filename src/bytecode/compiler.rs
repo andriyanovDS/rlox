@@ -59,7 +59,7 @@ impl<'a> Compiler<'a> {
             scanner: context.scanner,
             interned_strings: context.interned_strings,
             string_constants: HashTable::new(),
-            scope: context.enclosing_scope,
+            scope: Rc::new(RefCell::new(Scope::new(Some(context.enclosing_scope)))),
             source: context.source,
             chunk: Chunk::new(),
             parse_rules: context.parse_rules,
@@ -350,10 +350,10 @@ impl<'a> Compiler<'a> {
         self.advance()?;
         self.scope_mut().begin_scope();
         let result = self.block_statement();
-        let locals_count = self.scope_mut().end_scope();
-        for _ in 0..locals_count {
-            let line = self.previous_token().line;
-            self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
+        let line = self.previous_token().line;
+        let op_codes = self.scope_mut().end_scope();
+        for op_code in op_codes {
+            self.chunk.push_code(op_code, line);
         }
         result
     }
@@ -784,7 +784,7 @@ impl<'a> Compiler<'a> {
             Some(index) => Ok((OpCode::SetLocal, OpCode::GetLocal, index)),
             None => {
                 if let Some(upvalue_index) = self.scope_mut().resolve_upvalue(self.previous_token(), self.source)? {
-                    return Ok((OpCode::SetUpvalue, OpCode::SetUpvalue, upvalue_index));
+                    return Ok((OpCode::SetUpvalue, OpCode::GetUpvalue, upvalue_index));
                 }
                 let object = self.intern_string();
                 let index = self.string_constants.find(&object).copied();

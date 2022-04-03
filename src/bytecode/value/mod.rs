@@ -6,6 +6,7 @@ pub mod object_function;
 pub mod object_string;
 pub mod object_native_function;
 pub mod object_closure;
+pub mod object_upvalue;
 
 use object_function::ObjectFunction;
 use object_string::ObjectString;

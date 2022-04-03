@@ -65,7 +65,7 @@ impl Chunk {
             | OpCode::Subtract | OpCode::Multiply | OpCode::Divide
             | OpCode::False | OpCode::True | OpCode::Nil
             | OpCode::Not | OpCode::Equal | OpCode::Greater
-            | OpCode::Less | OpCode::Print | OpCode::Pop => {
+            | OpCode::Less | OpCode::Print | OpCode::Pop | OpCode::CloseUpvalue => {
                 println!("{:04} {:4} {} at {}", offset, "", op_code, line);
             }
             OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal
@@ -84,7 +84,7 @@ impl Chunk {
             }
             OpCode::Call => {
                 let argument_count = *(iter.next().unwrap());
-                println!("{:04} {} {} at {}", offset, op_code, argument_count, line)
+                println!("{:04} {:4} {} {} at {}", offset, "", op_code, argument_count, line)
             }
             OpCode::Closure => {
                 print!("{:04} ", offset);

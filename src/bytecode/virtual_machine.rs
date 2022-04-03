@@ -10,6 +10,7 @@ use std::rc::Rc;
 use std::slice::Iter;
 use super::value::object_closure::ObjectClosure;
 use super::value::object_native_function::ObjectNativeFunction;
+use super::value::object_upvalue::ObjectUpvalue;
 
 pub const FRAMES_SIZE: usize = 64;
 pub struct VirtualMachine {
@@ -20,7 +21,7 @@ pub struct VirtualMachine {
 }
 
 impl VirtualMachine {
-    pub fn new(interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>, ) -> Self {
+    pub fn new(interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,) -> Self {
         let mut globals = HashTable::new();
         VirtualMachine::add_native_functions(&mut globals, &interned_strings);
         Self {
@@ -32,7 +33,8 @@ impl VirtualMachine {
     }
 
     pub fn interpret(&mut self, chunk: &Chunk) {
-        if let Err(error) = self.handle_chunk(chunk, 0) {
+        let upvalue = Vec::new();
+        if let Err(error) = self.handle_chunk(chunk, 0, &Vec::new(), &upvalue) {
             eprintln!("[line {}] in script", chunk.line(error.0))
         }
     }
@@ -54,7 +56,13 @@ impl VirtualMachine {
         }));
     }
 
-    fn handle_chunk(&mut self, chunk: &Chunk, slots_start: usize) -> InterpretResult {
+    fn handle_chunk(
+        &mut self,
+        chunk: &Chunk,
+        slots_start: usize,
+        upvalues: &[ObjectUpvalue],
+        enclosing_upvalues: &[ObjectUpvalue]
+    ) -> InterpretResult {
         self.frame_count += 1;
         assert!(self.frame_count < FRAMES_SIZE);
 
@@ -96,8 +104,8 @@ impl VirtualMachine {
                     OpCode::SetGlobal => self.set_global_variable(chunk, &mut iter, prev_offset)?,
                     OpCode::GetLocal => self.get_local_variable(&mut iter, slots_start),
                     OpCode::SetLocal => self.set_local_variable(&mut iter, slots_start),
-                    OpCode::GetUpvalue => self.get_upvalue(&mut iter, slots_start),
-                    OpCode::SetUpvalue => self.set_upvalue(&mut iter, slots_start),
+                    OpCode::GetUpvalue => self.get_upvalue(&mut iter, &upvalues),
+                    OpCode::SetUpvalue => self.set_upvalue(&mut iter, upvalues),
                     OpCode::JumpIfFalse => self.handle_jump_if_false(&mut iter, &mut offset),
                     OpCode::Jump => {
                         let jump_offset = Chunk::read_condition_offset(&mut iter);
@@ -112,8 +120,9 @@ impl VirtualMachine {
                         iter.nth(offset - jump_offset - 1);
                         offset -= jump_offset;
                     }
-                    OpCode::Call => self.handle_function_call(&mut iter, prev_offset)?,
-                    OpCode::Closure => self.read_closure(chunk, &mut iter),
+                    OpCode::Call => self.handle_function_call(&mut iter, prev_offset, &upvalues)?,
+                    OpCode::Closure => self.read_closure(chunk, &mut iter, slots_start, enclosing_upvalues),
+                    OpCode::CloseUpvalue => {}
                 }
             } else {
                 break Ok(());
@@ -270,13 +279,16 @@ impl VirtualMachine {
     }
 
     #[inline]
-    fn get_upvalue(&mut self, iter: &mut Iter<u8>, slots_start: usize) {
-
+    fn get_upvalue(&mut self, iter: &mut Iter<u8>, upvalues: &[ObjectUpvalue]) {
+        let slot = *(iter.next().unwrap()) as usize;
+        self.stack.push(upvalues[slot].location().clone())
     }
 
     #[inline]
-    fn set_upvalue(&mut self, iter: &mut Iter<u8>, slots_start: usize) {
-
+    fn set_upvalue(&mut self, iter: &mut Iter<u8>, upvalues: &[ObjectUpvalue]) {
+        let slot = *(iter.next().unwrap()) as usize;
+        let value = self.stack.peek_end(0).unwrap();
+        upvalues[slot].set(value.clone())
     }
 
     #[inline]
@@ -296,7 +308,8 @@ impl VirtualMachine {
     fn handle_function_call(
         &mut self,
         iter: &mut Iter<u8>,
-        offset: usize
+        offset: usize,
+        upvalues: &[ObjectUpvalue],
     ) -> InterpretResult {
         let arguments_count = *(iter.next().unwrap());
         let arguments_count_usize = arguments_count as usize;
@@ -312,7 +325,7 @@ impl VirtualMachine {
             }
             Value::Closure(closure) => {
                 let closure = Rc::clone(closure);
-                self.call_closure(&closure, arguments_count_usize, offset)
+                self.call_closure(&closure, arguments_count_usize, offset, &closure.upvalues, upvalues)
             },
             Value::NativeFunction(object) => {
                 let result: Value = (object.function)();
@@ -325,27 +338,56 @@ impl VirtualMachine {
         }
     }
 
-    fn read_closure(&mut self, chunk: &Chunk, iter: &mut Iter<u8>) {
-        match chunk.read_constant(iter) {
-            Value::Function(function) => {
-                let closure = ObjectClosure {
-                    function: Rc::clone(function)
-                };
-                self.stack.push(Value::Closure(Rc::new(closure)))
+    fn read_closure(
+        &mut self,
+        chunk: &Chunk,
+        iter: &mut Iter<u8>,
+        slots_start: usize,
+        enclosing_upvalues: &[ObjectUpvalue]
+    ) {
+        let constant = chunk.read_constant(iter);
+        if let Value::Function(function) = constant {
+            let mut upvalues = Vec::new();
+
+            for _ in 0..function.upvalue_count {
+                let is_local = if *(iter.next().unwrap()) == 1u8 { true } else { false };
+                let index = *(iter.next().unwrap());
+                if is_local {
+                    let value = self.stack.value_at(slots_start + index as usize);
+                    upvalues.push(ObjectUpvalue::new(value));
+                } else {
+                    upvalues.push(enclosing_upvalues[index as usize].clone());
+                }
             }
-            _ => panic!("Unexpected value found instead of ObjectFunction")
+
+            let closure = ObjectClosure {
+                function: Rc::clone(function),
+                upvalues,
+            };
+            self.stack.push(Value::Closure(Rc::new(closure)));
+
+        } else {
+            panic!("Unexpected value found instead of ObjectFunction")
         }
     }
 
     #[inline]
-    fn call_closure(&mut self, closure: &ObjectClosure, arguments_count: usize, offset: usize) -> InterpretResult {
+    fn call_closure(
+        &mut self,
+        closure: &ObjectClosure,
+        arguments_count: usize,
+        offset: usize,
+        upvalues: &[ObjectUpvalue],
+        enclosing_upvalues: &[ObjectUpvalue]
+    ) -> InterpretResult {
         if self.frame_count + 1 == FRAMES_SIZE {
             return Err(VirtualMachine::runtime_error("Stack overflow.".to_string(), offset));
         }
         let cloned_function = Rc::clone(&closure.function);
         let slots_start = self.stack.top_index() - arguments_count;
         let chunk = &cloned_function.as_ref().chunk;
-        let result = self.handle_chunk(chunk, slots_start);
+
+        let result = self.handle_chunk(chunk, slots_start, upvalues, enclosing_upvalues);
         let return_value = self.stack.pop().unwrap();
         while self.stack.top_index() + 1 > slots_start {
             self.stack.pop();

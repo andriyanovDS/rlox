@@ -3,7 +3,6 @@ use std::rc::Rc;
 use crate::bytecode::compiler::{Compiler, CompilerContext};
 use crate::bytecode::hash_table::HashTable;
 use crate::bytecode::value::object_string::ObjectString;
-use crate::bytecode::scanner::Scanner;
 use crate::bytecode::virtual_machine::VirtualMachine;
 
 mod chunk;

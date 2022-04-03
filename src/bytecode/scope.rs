@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::iter::Rev;
 use std::rc::Rc;
 use std::slice::Iter;
+use super::op_code::OpCode;
 use super::upvalue::{Upvalues, UpvaluesRefIterator};
 use super::compiler::{CompilationResult, CompileError};
 use super::token::{Token, TokenType};
@@ -13,12 +14,20 @@ const NOT_INITIALIZED: Local = Local {
         lexeme: None,
         line: 0
     },
-    depth: 0
+    depth: 0,
+    is_captured: false,
 };
 
 struct Local {
     token: Token,
     depth: u8,
+    is_captured: bool,
+}
+
+impl Local {
+    fn new(token: Token) -> Self {
+        Self { token, depth: 0, is_captured: false }
+    }
 }
 
 pub struct Scope {
@@ -38,10 +47,6 @@ impl Scope {
             locals_count: 0,
             scope_depth: 0,
         }
-    }
-
-    pub fn take_enclosing_scope(&mut self) -> Option<Rc<RefCell<Scope>>> {
-        self.enclosing_scope.take()
     }
 
     pub fn upvalues_size(&self) -> u8 {
@@ -65,13 +70,18 @@ impl Scope {
     }
 
     #[inline]
-    pub fn end_scope(&mut self) -> u8 {
-        let local_count = self.locals_iter()
+    pub fn end_scope(&mut self) -> Vec<OpCode> {
+        let op_codes: Vec<OpCode> = self.locals_iter()
             .take_while(|v| v.depth == self.scope_depth)
-            .fold(0u8, |acc, _| acc + 1);
-        self.scope_depth -= 1;
-        self.locals_count -= local_count;
-        local_count
+            .map(|local| {
+                match local.is_captured {
+                    true => OpCode::CloseUpvalue,
+                    false => OpCode::Pop
+                }
+            })
+            .collect();
+        self.locals_count -= op_codes.len() as u8;
+        op_codes
     }
 
     #[inline]
@@ -116,6 +126,7 @@ impl Scope {
                 let mut scope = scope.as_ref().borrow_mut();
                 match scope.find_local(token, source)? {
                     Some(index) => {
+                        scope.locals[index as usize].is_captured = true;
                         drop(scope);
                         self.add_upvalue(token, index, true)
                     },
@@ -162,10 +173,7 @@ impl Scope {
             return Err(CompileError::make_from_token(&token, "Too many local variables in function."));
         }
         let index = self.locals_count;
-        self.locals[index as usize] = Local {
-            token,
-            depth: 0,
-        };
+        self.locals[index as usize] = Local::new(token);
         self.locals_count += 1;
         Ok(())
     }

@@ -68,6 +68,12 @@ impl Stack {
         self.buffer[index].clone()
     }
 
+    #[inline]
+    pub fn value_at(&mut self, index: usize) -> &mut Value {
+        assert!(index <= self.top_index);
+        &mut self.buffer[index]
+    }
+
     pub fn print_debug_info(&self) {
         println!("Index {}, Result {:?}", self.top_index, &self.buffer[..self.top_index])
     }
