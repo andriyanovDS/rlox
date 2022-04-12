@@ -350,11 +350,7 @@ impl<'a> Compiler<'a> {
         self.advance()?;
         self.scope_mut().begin_scope();
         let result = self.block_statement();
-        let line = self.previous_token().line;
-        let op_codes = self.scope_mut().end_scope();
-        for op_code in op_codes {
-            self.chunk.push_code(op_code, line);
-        }
+        self.end_scope();
         result
     }
 
@@ -431,7 +427,7 @@ impl<'a> Compiler<'a> {
             self.patch_jump(exit_jump)?;
             self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, statement_line));
         }
-        self.scope_mut().end_scope();
+        self.end_scope();
         Ok(())
     }
 
@@ -819,6 +815,14 @@ impl<'a> Compiler<'a> {
     fn emit_return(&mut self, line: usize) {
         self.chunk.push_code(OpCode::Nil, line);
         self.modify_chunk(|chunk| chunk.push_code(OpCode::Return, line));
+    }
+
+    fn end_scope(&mut self) {
+        let line = self.current_token().line;
+        let op_codes = self.scope_mut().end_scope();
+        for op_code in op_codes {
+            self.chunk.push_code(op_code, line);
+        }
     }
 
     #[inline]

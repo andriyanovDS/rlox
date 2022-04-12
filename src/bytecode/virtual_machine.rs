@@ -1,4 +1,5 @@
 use std::cell::{RefCell};
+use std::cmp::Ordering;
 use super::stack::Stack;
 use super::op_code::OpCode;
 use super::chunk::Chunk;
@@ -8,6 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
+use std::collections::BinaryHeap;
 use super::value::object_closure::ObjectClosure;
 use super::value::object_native_function::ObjectNativeFunction;
 use super::value::object_upvalue::ObjectUpvalue;
@@ -18,6 +20,7 @@ pub struct VirtualMachine {
     interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
     globals: HashTable<Rc<ObjectString>, Value>,
     frame_count: usize,
+    open_upvalues: BinaryHeap<Rc<RefCell<ObjectUpvalue>>>,
 }
 
 impl VirtualMachine {
@@ -29,6 +32,7 @@ impl VirtualMachine {
             interned_strings,
             globals,
             frame_count: 0,
+            open_upvalues: BinaryHeap::new(),
         }
     }
 
@@ -60,13 +64,11 @@ impl VirtualMachine {
         &mut self,
         chunk: &Chunk,
         slots_start: usize,
-        upvalues: &[ObjectUpvalue],
-        enclosing_upvalues: &[ObjectUpvalue]
+        upvalues: &[Rc<RefCell<ObjectUpvalue>>],
+        enclosing_upvalues: &[Rc<RefCell<ObjectUpvalue>>]
     ) -> InterpretResult {
         self.frame_count += 1;
         assert!(self.frame_count < FRAMES_SIZE);
-
-        chunk.disassemble(format!("{}", slots_start));
 
         let mut iter = chunk.codes.iter();
         let mut offset: usize = 0;
@@ -76,7 +78,10 @@ impl VirtualMachine {
                 let prev_offset = offset;
                 offset += op_code.code_size();
                 match op_code {
-                    OpCode::Return => { break Ok(()); },
+                    OpCode::Return => {
+                        self.close_upvalue(self.stack.top_index());
+                        break Ok(());
+                    },
                     OpCode::Constant => {
                         let constant = chunk.read_constant(&mut iter);
                         self.stack.push(constant.clone());
@@ -121,8 +126,13 @@ impl VirtualMachine {
                         offset -= jump_offset;
                     }
                     OpCode::Call => self.handle_function_call(&mut iter, prev_offset, &upvalues)?,
-                    OpCode::Closure => self.read_closure(chunk, &mut iter, slots_start, enclosing_upvalues),
-                    OpCode::CloseUpvalue => {}
+                    OpCode::Closure => {
+                        self.read_closure(chunk, &mut offset, &mut iter, slots_start, enclosing_upvalues)
+                    },
+                    OpCode::CloseUpvalue => {
+                        self.close_upvalue(self.stack.top_index());
+                        self.stack.pop();
+                    },
                 }
             } else {
                 break Ok(());
@@ -279,16 +289,16 @@ impl VirtualMachine {
     }
 
     #[inline]
-    fn get_upvalue(&mut self, iter: &mut Iter<u8>, upvalues: &[ObjectUpvalue]) {
+    fn get_upvalue(&mut self, iter: &mut Iter<u8>, upvalues: &[Rc<RefCell<ObjectUpvalue>>]) {
         let slot = *(iter.next().unwrap()) as usize;
-        self.stack.push(upvalues[slot].location().clone())
+        self.stack.push(upvalues[slot].as_ref().borrow().value().clone())
     }
 
     #[inline]
-    fn set_upvalue(&mut self, iter: &mut Iter<u8>, upvalues: &[ObjectUpvalue]) {
+    fn set_upvalue(&mut self, iter: &mut Iter<u8>, upvalues: &[Rc<RefCell<ObjectUpvalue>>]) {
         let slot = *(iter.next().unwrap()) as usize;
         let value = self.stack.peek_end(0).unwrap();
-        upvalues[slot].set(value.clone())
+        upvalues[slot].as_ref().borrow_mut().set_value(value.clone())
     }
 
     #[inline]
@@ -309,7 +319,7 @@ impl VirtualMachine {
         &mut self,
         iter: &mut Iter<u8>,
         offset: usize,
-        upvalues: &[ObjectUpvalue],
+        upvalues: &[Rc<RefCell<ObjectUpvalue>>],
     ) -> InterpretResult {
         let arguments_count = *(iter.next().unwrap());
         let arguments_count_usize = arguments_count as usize;
@@ -341,9 +351,10 @@ impl VirtualMachine {
     fn read_closure(
         &mut self,
         chunk: &Chunk,
+        offset: &mut usize,
         iter: &mut Iter<u8>,
         slots_start: usize,
-        enclosing_upvalues: &[ObjectUpvalue]
+        enclosing_upvalues: &[Rc<RefCell<ObjectUpvalue>>]
     ) {
         let constant = chunk.read_constant(iter);
         if let Value::Function(function) = constant {
@@ -353,11 +364,12 @@ impl VirtualMachine {
                 let is_local = if *(iter.next().unwrap()) == 1u8 { true } else { false };
                 let index = *(iter.next().unwrap());
                 if is_local {
-                    let value = self.stack.value_at(slots_start + index as usize);
-                    upvalues.push(ObjectUpvalue::new(value));
+                    let upvalue = self.capture_upvalue(slots_start + index as usize);
+                    upvalues.push(upvalue);
                 } else {
                     upvalues.push(enclosing_upvalues[index as usize].clone());
                 }
+                *offset += 2;
             }
 
             let closure = ObjectClosure {
@@ -371,14 +383,51 @@ impl VirtualMachine {
         }
     }
 
+    fn capture_upvalue(&mut self, index: usize) -> Rc<RefCell<ObjectUpvalue>> {
+        let value = self.stack.value_at(index);
+        let object_upvalue = ObjectUpvalue::new(value);
+
+        let existing_upvalue = self.open_upvalues
+            .iter()
+            .find(|v| v.as_ref().borrow().eq(&object_upvalue));
+
+        match existing_upvalue {
+            Some(upvalue) => upvalue.clone(),
+            None => {
+                let captured_upvalue = Rc::new(RefCell::new(object_upvalue));
+                self.open_upvalues.push(captured_upvalue.clone());
+                captured_upvalue
+            }
+        }
+    }
+
+    fn close_upvalue(&mut self, top_index: usize) {
+        let value = self.stack.value_at(top_index);
+        let object_upvalue = ObjectUpvalue::new(value);
+        loop {
+            let ordering = self.open_upvalues.peek().map(|v| object_upvalue.cmp(&v.as_ref().borrow()));
+            match ordering {
+                Some(Ordering::Equal) => {},
+                Some(Ordering::Greater) => {},
+                _ => {
+                    break;
+                }
+            }
+            let upvalue = self.open_upvalues.pop().unwrap();
+            let mut upvalue = upvalue.as_ref().borrow_mut();
+            let value = upvalue.value().clone();
+            upvalue.close_value(value.clone())
+        }
+    }
+
     #[inline]
     fn call_closure(
         &mut self,
         closure: &ObjectClosure,
         arguments_count: usize,
         offset: usize,
-        upvalues: &[ObjectUpvalue],
-        enclosing_upvalues: &[ObjectUpvalue]
+        upvalues: &[Rc<RefCell<ObjectUpvalue>>],
+        enclosing_upvalues: &[Rc<RefCell<ObjectUpvalue>>]
     ) -> InterpretResult {
         if self.frame_count + 1 == FRAMES_SIZE {
             return Err(VirtualMachine::runtime_error("Stack overflow.".to_string(), offset));
