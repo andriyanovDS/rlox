@@ -7,11 +7,13 @@ pub mod object_string;
 pub mod object_native_function;
 pub mod object_closure;
 pub mod object_upvalue;
+pub mod object_class;
 
 use object_function::ObjectFunction;
 use object_string::ObjectString;
 use object_native_function::ObjectNativeFunction;
 use object_closure::ObjectClosure;
+use object_class::ObjectClass;
 
 #[derive(Clone)]
 pub enum Value {
@@ -22,6 +24,7 @@ pub enum Value {
     Function(Rc<ObjectFunction>),
     NativeFunction(ObjectNativeFunction),
     Closure(Rc<ObjectClosure>),
+    Class(Rc<ObjectClass>)
 }
 
 impl Default for Value {
@@ -36,14 +39,17 @@ impl PartialEq for Value {
             (Value::Nil, Value::Nil) => true,
             (Value::String(left), Value::String(right)) => {
                 Rc::as_ptr(left) == Rc::as_ptr(right)
-            },
+            }
             (Value::Function(left), Value::Function(right)) => {
                 Rc::as_ptr(left) == Rc::as_ptr(right)
             }
             (Value::NativeFunction(left), Value::NativeFunction(right)) => {
                 *(left.function) == *(right.function)
-            },
+            }
             (Value::Closure(left), Value::Closure(right)) => {
+                Rc::as_ptr(left) == Rc::as_ptr(right)
+            }
+            (Value::Class(left), Value::Class(right)) => {
                 Rc::as_ptr(left) == Rc::as_ptr(right)
             }
             _ => false
@@ -60,6 +66,7 @@ impl Debug for Value {
             Value::Function(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().name),
             Value::NativeFunction(_) => write!(formatter, "<native fn>"),
             Value::Closure(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().function.name),
+            Value::Class(class) => write!(formatter, "{:?}", class.as_ref().name),
             Value::Nil => write!(formatter, "{:5}", "Nil"),
         }
     }

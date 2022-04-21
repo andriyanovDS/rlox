@@ -10,6 +10,7 @@ use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
 use std::collections::BinaryHeap;
+use super::value::object_class::ObjectClass;
 use super::value::object_closure::ObjectClosure;
 use super::value::object_native_function::ObjectNativeFunction;
 use super::value::object_upvalue::ObjectUpvalue;
@@ -133,6 +134,7 @@ impl VirtualMachine {
                         self.close_upvalue(self.stack.top_index());
                         self.stack.pop();
                     },
+                    OpCode::Class => self.read_class(chunk, &mut iter),
                 }
             } else {
                 break Ok(());
@@ -447,6 +449,16 @@ impl VirtualMachine {
             eprintln!("[line {}] in {:?}()", chunk.line(offset), cloned_function.name);
             InterpretError(offset)
         })
+    }
+
+    #[inline]
+    fn read_class(&mut self, chunk: &Chunk, iter: &mut Iter<u8>) {
+        if let Value::String(object) = chunk.read_constant(iter) {
+            let class_object = ObjectClass::new(object.clone());
+            self.stack.push(Value::Class(Rc::new(class_object)));
+        } else {
+            panic!("Unexpected value type instead of class declaration");
+        }
     }
 
     #[inline]

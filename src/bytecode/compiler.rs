@@ -148,6 +148,10 @@ impl<'a> Compiler<'a> {
                 self.advance()?;
                 self.function_declaration()
             }
+            TokenType::Class => {
+                self.advance()?;
+                self.class_declaration()
+            }
             _ => self.statement()
         }
     }
@@ -336,6 +340,26 @@ impl<'a> Compiler<'a> {
             }
         }
         Ok(arity)
+    }
+
+    #[inline]
+    fn class_declaration(&mut self) -> CompilationResult {
+        self.consume(TokenType::Identifier, "Expect class name.")?;
+        let name = self.intern_string();
+        let constant_index = self.chunk.push_constant_to_pool(Value::String(name));
+        let line = self.previous_token().line;
+        if self.scope().is_global_scope() {
+            self.push_code(OpCode::Class);
+            self.chunk.push(constant_index as u8, line);
+            self.define_variable(Some(constant_index), line);
+        } else {
+            self.declare_local_variable()?;
+            self.push_code(OpCode::Class);
+            self.chunk.push(constant_index as u8, line);
+            self.define_variable(None, line);
+        }
+        self.consume(TokenType::LeftBrace, "Expect '{' before class body.")?;
+        self.consume(TokenType::RightBrace, "Expect '}' after class body.")
     }
 
     #[inline]

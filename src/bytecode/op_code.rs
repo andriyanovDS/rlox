@@ -32,6 +32,7 @@ pub enum OpCode {
     Call,
     Closure,
     CloseUpvalue,
+    Class,
 }
 
 impl OpCode {
@@ -39,7 +40,7 @@ impl OpCode {
         match self {
             OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::Closure
             | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal | OpCode::Call
-            | OpCode::GetUpvalue | OpCode::SetUpvalue => 2,
+            | OpCode::GetUpvalue | OpCode::SetUpvalue | OpCode::Class => 2,
             OpCode::JumpIfFalse | OpCode::Loop | OpCode::Jump => 3,
             OpCode::ConstantLong => 4,
             _ => 1
@@ -79,7 +80,8 @@ impl Display for OpCode {
             OpCode::Loop => "OP_LOOP",
             OpCode::Call => "OP_CALL",
             OpCode::Closure => "OP_CLOSURE",
-            OpCode::CloseUpvalue => "OP_CLOSE_UPVALUE"
+            OpCode::CloseUpvalue => "OP_CLOSE_UPVALUE",
+            OpCode::Class => "OP_CLASS",
         };
         write!(f, "{:<16}", representation)
     }
