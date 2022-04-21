@@ -10,6 +10,7 @@ use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
 use std::collections::BinaryHeap;
+use super::value::object_instance::ObjectInstance;
 use super::value::object_class::ObjectClass;
 use super::value::object_closure::ObjectClosure;
 use super::value::object_native_function::ObjectNativeFunction;
@@ -126,7 +127,7 @@ impl VirtualMachine {
                         iter.nth(offset - jump_offset - 1);
                         offset -= jump_offset;
                     }
-                    OpCode::Call => self.handle_function_call(&mut iter, prev_offset, &upvalues)?,
+                    OpCode::Call => self.handle_call(&mut iter, prev_offset, &upvalues)?,
                     OpCode::Closure => {
                         self.read_closure(chunk, &mut offset, &mut iter, slots_start, enclosing_upvalues)
                     },
@@ -317,7 +318,7 @@ impl VirtualMachine {
     }
 
     #[inline]
-    fn handle_function_call(
+    fn handle_call(
         &mut self,
         iter: &mut Iter<u8>,
         offset: usize,
@@ -325,9 +326,9 @@ impl VirtualMachine {
     ) -> InterpretResult {
         let arguments_count = *(iter.next().unwrap());
         let arguments_count_usize = arguments_count as usize;
-        let function = self.stack.peek_end(arguments_count_usize);
+        let callee = self.stack.peek_end(arguments_count_usize);
 
-        match function.unwrap() {
+        match callee.unwrap() {
             Value::Closure(closure) if closure.function.arity != arguments_count => {
                 let func = &closure.function;
                 Err(VirtualMachine::runtime_error(
@@ -342,6 +343,11 @@ impl VirtualMachine {
             Value::NativeFunction(object) => {
                 let result: Value = (object.function)();
                 self.stack.push(result);
+                Ok(())
+            }
+            Value::Class(class) => {
+                let instance = ObjectInstance::new(class.clone());
+                self.stack.push(Value::Instance(Rc::new(instance)));
                 Ok(())
             }
             _ => {
