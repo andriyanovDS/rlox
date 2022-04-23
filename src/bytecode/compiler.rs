@@ -621,7 +621,7 @@ impl<'a> Compiler<'a> {
             let token = self.previous_token();
             let rule = self.parse_rule(&token.token_type);
             match rule.parse_type.infix() {
-                Some(func) => func(self),
+                Some(func) => func(self, can_assign),
                 None => Err(CompileError::make_from_token(token, "Expect expression."))
             }?;
         };
@@ -654,7 +654,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn binary(&mut self) -> CompilationResult {
+    fn binary(&mut self, _can_assign: bool) -> CompilationResult {
         let previous_token = self.previous_token();
         let token_type = previous_token.token_type;
         let token_line = previous_token.line;
@@ -688,7 +688,25 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn and_operator(&mut self) -> CompilationResult {
+    fn dot(&mut self, can_assign: bool) -> CompilationResult {
+        self.consume(TokenType::Identifier, "Expect property name after '.'.")?;
+        let name = self.intern_string();
+        let constant_index = self.chunk.push_constant_to_pool(Value::String(name)) as u8;
+        let line = self.current_token().line;
+        if can_assign && self.current_token().token_type == TokenType::Equal {
+            self.advance()?;
+            self.expression()?;
+            self.chunk.push_code(OpCode::SetProperty, line);
+            self.chunk.push(constant_index, line);
+            Ok(())
+        } else {
+            self.chunk.push_code(OpCode::GetProperty, line);
+            self.chunk.push(constant_index, line);
+            Ok(())
+        }
+    }
+
+    fn and_operator(&mut self, _can_assign: bool) -> CompilationResult {
         let line = self.current_token().line;
         let jump = self.emit_jump(OpCode::JumpIfFalse, line);
         self.modify_chunk(|chunk| chunk.push_code(OpCode::Pop, line));
@@ -697,7 +715,7 @@ impl<'a> Compiler<'a> {
         self.patch_jump(jump)
     }
 
-    fn or_operator(&mut self) -> CompilationResult {
+    fn or_operator(&mut self, _can_assign: bool) -> CompilationResult {
         let line = self.current_token().line;
         let else_jump = self.emit_jump(OpCode::JumpIfFalse, line);
         let end_jump = self.emit_jump(OpCode::Jump, line);
@@ -765,7 +783,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn function_call(&mut self) -> CompilationResult {
+    fn function_call(&mut self, _can_assign: bool) -> CompilationResult {
         let line = self.current_token().line;
         let arguments_count = self.parse_arguments()?;
         self.chunk.push_code(OpCode::Call, line);
@@ -917,7 +935,10 @@ impl<'a> Compiler<'a> {
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::LeftBrace
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::RightBrace
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Comma
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Dot
+            ParseRule {
+                parse_type: ParseType::Infix(Compiler::dot),
+                precedence: Precedence::Call
+            }, // TokenType::Dot
             ParseRule {
                 parse_type: ParseType::Both {
                     prefix: Compiler::unary,

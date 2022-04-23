@@ -52,21 +52,20 @@ impl TryFrom<u8> for Precedence {
     }
 }
 
-type InfixFn<'a> = fn(&mut Compiler<'a>) -> CompilationResult;
-type PrefixFn<'a> = fn(&mut Compiler<'a>, can_assign: bool) -> CompilationResult;
+type ParseFn<'a> = fn(&mut Compiler<'a>, can_assign: bool) -> CompilationResult;
 
 pub enum ParseType<'a> {
-    Prefix(PrefixFn<'a>),
-    Infix(InfixFn<'a>),
+    Prefix(ParseFn<'a>),
+    Infix(ParseFn<'a>),
     Both {
-        prefix: PrefixFn<'a>,
-        infix: InfixFn<'a>,
+        prefix: ParseFn<'a>,
+        infix: ParseFn<'a>,
     },
     None,
 }
 
 impl<'a> ParseType<'a> {
-    pub fn prefix(&self) -> Option<&PrefixFn<'a>> {
+    pub fn prefix(&self) -> Option<&ParseFn<'a>> {
         match self {
             ParseType::Prefix(func) => Some(func),
             ParseType::Both { prefix, infix: _ } => Some(prefix),
@@ -74,7 +73,7 @@ impl<'a> ParseType<'a> {
         }
     }
 
-    pub fn infix(&self) -> Option<&InfixFn<'a>> {
+    pub fn infix(&self) -> Option<&ParseFn<'a>> {
         match self {
             ParseType::Infix(func) => Some(func),
             ParseType::Both { prefix: _, infix } => Some(infix),

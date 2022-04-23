@@ -14,4 +14,8 @@ impl ObjectInstance {
     pub fn new(class: Rc<ObjectClass>) -> Self {
         Self { class, fields: HashMap::new() }
     }
+
+    pub fn property(&self, name: &Rc<ObjectString>) -> Option<&Value> {
+        self.fields.get(name)
+    }
 }

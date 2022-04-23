@@ -1,8 +1,9 @@
 use std::fmt::{Debug, Formatter};
+use std::hash::Hash;
 use std::rc::Rc;
 use super::super::hash_table::{Hashable, HashTable};
 
-#[derive(Clone)]
+#[derive(Clone, Hash, Eq)]
 pub struct ObjectString {
     pub value: String,
     hash: usize,

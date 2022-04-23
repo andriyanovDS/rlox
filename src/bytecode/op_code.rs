@@ -24,6 +24,8 @@ pub enum OpCode {
     SetGlobal,
     GetLocal,
     SetLocal,
+    GetProperty,
+    SetProperty,
     GetUpvalue,
     SetUpvalue,
     JumpIfFalse,
@@ -40,7 +42,7 @@ impl OpCode {
         match self {
             OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::Closure
             | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal | OpCode::Call
-            | OpCode::GetUpvalue | OpCode::SetUpvalue | OpCode::Class => 2,
+            | OpCode::GetUpvalue | OpCode::SetUpvalue | OpCode::Class | OpCode::SetProperty | OpCode::GetProperty => 2,
             OpCode::JumpIfFalse | OpCode::Loop | OpCode::Jump => 3,
             OpCode::ConstantLong => 4,
             _ => 1
@@ -75,6 +77,8 @@ impl Display for OpCode {
             OpCode::SetLocal => "OP_SET_LOCAL",
             OpCode::GetUpvalue => "OP_GET_UPVALUE",
             OpCode::SetUpvalue => "OP_SET_UPVALUE",
+            OpCode::GetProperty => "OP_GET_PROPERTY",
+            OpCode::SetProperty => "OP_SET_PROPERTY",
             OpCode::JumpIfFalse => "OP_JUMP_IF_FALSE",
             OpCode::Jump => "OP_JUMP",
             OpCode::Loop => "OP_LOOP",

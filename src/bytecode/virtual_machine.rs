@@ -113,6 +113,8 @@ impl VirtualMachine {
                     OpCode::SetLocal => self.set_local_variable(&mut iter, slots_start),
                     OpCode::GetUpvalue => self.get_upvalue(&mut iter, &upvalues),
                     OpCode::SetUpvalue => self.set_upvalue(&mut iter, upvalues),
+                    OpCode::GetProperty => self.get_property(chunk, &mut iter, prev_offset)?,
+                    OpCode::SetProperty => self.set_property(&mut iter, slots_start),
                     OpCode::JumpIfFalse => self.handle_jump_if_false(&mut iter, &mut offset),
                     OpCode::Jump => {
                         let jump_offset = Chunk::read_condition_offset(&mut iter);
@@ -302,6 +304,34 @@ impl VirtualMachine {
         let slot = *(iter.next().unwrap()) as usize;
         let value = self.stack.peek_end(0).unwrap();
         upvalues[slot].as_ref().borrow_mut().set_value(value.clone())
+    }
+
+    #[inline]
+    fn get_property(&mut self, chunk: &Chunk, iter: &mut Iter<u8>, offset: usize) -> InterpretResult {
+        let top_value = self.stack.peek_end(0).unwrap();
+        let constant = chunk.read_constant(iter);
+        match (top_value, constant) {
+            (Value::Instance(instance), Value::String(object)) => {
+                match instance.as_ref().property(object) {
+                    Some(value) => {
+                        let value = value.clone();
+                        self.stack.pop();
+                        self.stack.push(value.clone());
+                        Ok(())
+                    }
+                    None => {
+                        Err(VirtualMachine::runtime_error(format!("Undefined property {:?}", object), offset))
+                    }
+                }
+            }
+            (Value::Instance(_), _) => panic!("Unexpected value type instead of instance property name"),
+            _ => Err(VirtualMachine::runtime_error("Only instances have properties".to_string(), offset))
+        }
+    }
+
+    #[inline]
+    fn set_property(&mut self, iter: &mut Iter<u8>, slots_start: usize) {
+
     }
 
     #[inline]
