@@ -308,23 +308,16 @@ impl VirtualMachine {
 
     #[inline]
     fn get_property(&mut self, chunk: &Chunk, iter: &mut Iter<u8>, offset: usize) -> InterpretResult {
-        let top_value = self.stack.peek_end(0).unwrap();
+        let top_value = self.stack.pop().unwrap();
         let constant = chunk.read_constant(iter);
         match (top_value, constant) {
             (Value::Instance(instance), Value::String(object)) => {
                 let instance = instance.as_ref().borrow();
-                match instance.property(object) {
-                    Some(value) => {
-                        let value = value.clone();
-                        drop(instance);
-                        self.stack.pop();
-                        self.stack.push(value.clone());
-                        Ok(())
-                    }
-                    None => {
-                        Err(VirtualMachine::runtime_error(format!("Undefined property {:?}", object), offset))
-                    }
-                }
+                let value = instance.property(object)
+                    .map(|v| v.clone())
+                    .unwrap_or_else(|| Value::Nil);
+                self.stack.push(value);
+                Ok(())
             }
             (Value::Instance(_), _) => panic!("Unexpected value type instead of instance property name"),
             _ => Err(VirtualMachine::runtime_error("Only instances have properties".to_string(), offset))
