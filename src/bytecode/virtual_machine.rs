@@ -114,7 +114,7 @@ impl VirtualMachine {
                     OpCode::GetUpvalue => self.get_upvalue(&mut iter, &upvalues),
                     OpCode::SetUpvalue => self.set_upvalue(&mut iter, upvalues),
                     OpCode::GetProperty => self.get_property(chunk, &mut iter, prev_offset)?,
-                    OpCode::SetProperty => self.set_property(&mut iter, slots_start),
+                    OpCode::SetProperty => self.set_property(chunk, &mut iter, prev_offset)?,
                     OpCode::JumpIfFalse => self.handle_jump_if_false(&mut iter, &mut offset),
                     OpCode::Jump => {
                         let jump_offset = Chunk::read_condition_offset(&mut iter);
@@ -312,9 +312,11 @@ impl VirtualMachine {
         let constant = chunk.read_constant(iter);
         match (top_value, constant) {
             (Value::Instance(instance), Value::String(object)) => {
-                match instance.as_ref().property(object) {
+                let instance = instance.as_ref().borrow();
+                match instance.property(object) {
                     Some(value) => {
                         let value = value.clone();
+                        drop(instance);
                         self.stack.pop();
                         self.stack.push(value.clone());
                         Ok(())
@@ -330,8 +332,20 @@ impl VirtualMachine {
     }
 
     #[inline]
-    fn set_property(&mut self, iter: &mut Iter<u8>, slots_start: usize) {
+    fn set_property(&mut self, chunk: &Chunk, iter: &mut Iter<u8>, offset: usize) -> InterpretResult {
+        let property_name = chunk.read_constant(iter);
+        let value = self.stack.pop().unwrap();
+        let instance = self.stack.pop().unwrap();
 
+        match (instance, property_name) {
+            (Value::Instance(instance), Value::String(object)) => {
+                instance.borrow_mut().set_property(Rc::clone(object), value.clone());
+                self.stack.push(value);
+                Ok(())
+            }
+            (Value::Instance(_), _) => panic!("Unexpected value type instead of instance property name"),
+            _ => Err(VirtualMachine::runtime_error("Only instances have fields.".to_string(), offset))
+        }
     }
 
     #[inline]
@@ -377,7 +391,7 @@ impl VirtualMachine {
             }
             Value::Class(class) => {
                 let instance = ObjectInstance::new(class.clone());
-                self.stack.push(Value::Instance(Rc::new(instance)));
+                self.stack.push(Value::Instance(Rc::new(RefCell::new(instance))));
                 Ok(())
             }
             _ => {

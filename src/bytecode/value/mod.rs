@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::cmp::PartialEq;
 use std::rc::Rc;
@@ -27,7 +28,7 @@ pub enum Value {
     NativeFunction(ObjectNativeFunction),
     Closure(Rc<ObjectClosure>),
     Class(Rc<ObjectClass>),
-    Instance(Rc<ObjectInstance>)
+    Instance(Rc<RefCell<ObjectInstance>>)
 }
 
 impl Default for Value {
@@ -73,7 +74,9 @@ impl Debug for Value {
             Value::NativeFunction(_) => write!(formatter, "<native fn>"),
             Value::Closure(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().function.name),
             Value::Class(class) => write!(formatter, "{:?}", class.as_ref().name),
-            Value::Instance(instance) => write!(formatter, "{:?} instance", instance.as_ref().class.as_ref().name),
+            Value::Instance(instance) => {
+                write!(formatter, "{:?} instance", instance.as_ref().borrow().class.as_ref().name)
+            },
             Value::Nil => write!(formatter, "{:5}", "Nil"),
         }
     }

@@ -18,4 +18,8 @@ impl ObjectInstance {
     pub fn property(&self, name: &Rc<ObjectString>) -> Option<&Value> {
         self.fields.get(name)
     }
+
+    pub fn set_property(&mut self, name: Rc<ObjectString>, value: Value) {
+        self.fields.insert(name, value);
+    }
 }
