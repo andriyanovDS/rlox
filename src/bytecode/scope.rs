@@ -7,7 +7,6 @@ use super::upvalue::{Upvalues, UpvaluesRefIterator};
 use super::compiler::{CompilationResult, CompileError};
 use super::token::{Token, TokenType};
 
-const THIS_LEXEME: &str = "this";
 const STACK_SIZE: usize = u8::MAX as usize + 1;
 const NOT_INITIALIZED: Local = Local {
     token: Token {
@@ -170,7 +169,9 @@ impl Scope {
             }
             let stored_lexeme = match local.token.lexeme.as_ref() {
                 Some(lexeme) => lexeme.make_slice(source),
-                None if token.token_type == TokenType::This => THIS_LEXEME,
+                None if token.token_type == TokenType::This && local.token.token_type == TokenType::This => {
+                    return true;
+                },
                 None => {
                     continue;
                 }
