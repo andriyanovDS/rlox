@@ -12,6 +12,6 @@ pub struct ObjectFunction {
 
 impl Debug for ObjectFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Function {:?}, arity {}, upvalue: {}", self.name, self.arity, self.upvalue_count)
+        write!(f, "fn<{:?}>", self.name)
     }
 }

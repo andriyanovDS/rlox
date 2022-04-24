@@ -10,6 +10,7 @@ pub mod object_closure;
 pub mod object_upvalue;
 pub mod object_class;
 pub mod object_instance;
+pub mod object_bound_method;
 
 use object_function::ObjectFunction;
 use object_string::ObjectString;
@@ -17,6 +18,7 @@ use object_native_function::ObjectNativeFunction;
 use object_closure::ObjectClosure;
 use object_class::ObjectClass;
 use object_instance::ObjectInstance;
+use object_bound_method::ObjectBoundMethod;
 
 #[derive(Clone)]
 pub enum Value {
@@ -27,8 +29,9 @@ pub enum Value {
     Function(Rc<ObjectFunction>),
     NativeFunction(ObjectNativeFunction),
     Closure(Rc<ObjectClosure>),
-    Class(Rc<ObjectClass>),
-    Instance(Rc<RefCell<ObjectInstance>>)
+    Class(Rc<RefCell<ObjectClass>>),
+    Instance(Rc<RefCell<ObjectInstance>>),
+    BoundMethod(ObjectBoundMethod),
 }
 
 impl Default for Value {
@@ -59,6 +62,7 @@ impl PartialEq for Value {
             (Value::Instance(left), Value::Instance(right)) => {
                 Rc::as_ptr(left) == Rc::as_ptr(right)
             }
+            (Value::BoundMethod(left), Value::BoundMethod(right)) => left.eq(right),
             _ => false
         }
     }
@@ -69,15 +73,16 @@ impl Debug for Value {
         match self {
             Value::Bool(boolean) => write!(formatter, "{:5}", boolean),
             Value::Number(number) => write!(formatter, "{:5}", number),
-            Value::String(object) => write!(formatter, "{:5?}", object.as_ref().value),
+            Value::String(object) => object.fmt(formatter),
             Value::Function(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().name),
             Value::NativeFunction(_) => write!(formatter, "<native fn>"),
-            Value::Closure(obj) => write!(formatter, "fn<{:?}>", obj.as_ref().function.name),
-            Value::Class(class) => write!(formatter, "{:?}", class.as_ref().name),
+            Value::Closure(obj) => obj.as_ref().function.fmt(formatter),
+            Value::Class(class) => write!(formatter, "{:?}", class.as_ref().borrow().name),
             Value::Instance(instance) => {
-                write!(formatter, "{:?} instance", instance.as_ref().borrow().class.as_ref().name)
+                write!(formatter, "{:?} instance", instance.as_ref().borrow().class.as_ref().borrow().name)
             },
             Value::Nil => write!(formatter, "{:5}", "Nil"),
+            Value::BoundMethod(method) => method.fmt(formatter),
         }
     }
 }

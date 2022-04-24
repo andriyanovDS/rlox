@@ -10,6 +10,7 @@ use std::ops::{Sub, Mul, Div};
 use std::rc::Rc;
 use std::slice::Iter;
 use std::collections::BinaryHeap;
+use super::value::object_bound_method::ObjectBoundMethod;
 use super::value::object_instance::ObjectInstance;
 use super::value::object_class::ObjectClass;
 use super::value::object_closure::ObjectClosure;
@@ -138,6 +139,7 @@ impl VirtualMachine {
                         self.stack.pop();
                     },
                     OpCode::Class => self.read_class(chunk, &mut iter),
+                    OpCode::Method => self.define_method(chunk, &mut iter),
                 }
             } else {
                 break Ok(());
@@ -312,16 +314,30 @@ impl VirtualMachine {
         let constant = chunk.read_constant(iter);
         match (top_value, constant) {
             (Value::Instance(instance), Value::String(object)) => {
-                let instance = instance.as_ref().borrow();
-                let value = instance.property(object)
-                    .map(|v| v.clone())
-                    .unwrap_or_else(|| Value::Nil);
+                let instance_ref = instance.as_ref().borrow();
+                let value = match instance_ref.property(object) {
+                    Some(property) => property.clone(),
+                    None => self.bind_method(&instance_ref.class, object, &instance)
+                };
                 self.stack.push(value);
                 Ok(())
             }
             (Value::Instance(_), _) => panic!("Unexpected value type instead of instance property name"),
             _ => Err(VirtualMachine::runtime_error("Only instances have properties".to_string(), offset))
         }
+    }
+
+    fn bind_method(
+        &mut self,
+        class: &Rc<RefCell<ObjectClass>>,
+        name: &Rc<ObjectString>,
+        instance: &Rc<RefCell<ObjectInstance>>
+    ) -> Value {
+        class.as_ref().borrow().method(name)
+            .map(|method| {
+                let bound_method = ObjectBoundMethod::new(Rc::clone(instance), Rc::clone(method));
+                Value::BoundMethod(bound_method)
+            }).unwrap_or_else(|| Value::Nil)
     }
 
     #[inline]
@@ -338,6 +354,21 @@ impl VirtualMachine {
             }
             (Value::Instance(_), _) => panic!("Unexpected value type instead of instance property name"),
             _ => Err(VirtualMachine::runtime_error("Only instances have fields.".to_string(), offset))
+        }
+    }
+
+    #[inline]
+    fn define_method(&mut self, chunk: &Chunk, iter: &mut Iter<u8>) {
+        let method_name = chunk.read_constant(iter);
+        let method = self.stack.pop().unwrap();
+        let class = self.stack.peek_end(0).unwrap();
+        match (method, class, method_name) {
+            (Value::Closure(ref closure), Value::Class(class), Value::String(name)) => {
+                let mut class = class.as_ref().borrow_mut();
+                class.add_method(Rc::clone(name), Rc::clone(closure));
+            }
+            (Value::Closure(_), _, _) => panic!("Unexpected value type instead of class"),
+            _ => panic!("Unexpected value type instead of class method")
         }
     }
 
@@ -498,7 +529,7 @@ impl VirtualMachine {
     fn read_class(&mut self, chunk: &Chunk, iter: &mut Iter<u8>) {
         if let Value::String(object) = chunk.read_constant(iter) {
             let class_object = ObjectClass::new(object.clone());
-            self.stack.push(Value::Class(Rc::new(class_object)));
+            self.stack.push(Value::Class(Rc::new(RefCell::new(class_object))));
         } else {
             panic!("Unexpected value type instead of class declaration");
         }

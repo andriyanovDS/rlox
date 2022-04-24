@@ -35,13 +35,14 @@ pub enum OpCode {
     Closure,
     CloseUpvalue,
     Class,
+    Method,
 }
 
 impl OpCode {
     pub fn code_size(&self) -> usize {
         match self {
             OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::Closure
-            | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal | OpCode::Call
+            | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal | OpCode::Call | OpCode::Method
             | OpCode::GetUpvalue | OpCode::SetUpvalue | OpCode::Class | OpCode::SetProperty | OpCode::GetProperty => 2,
             OpCode::JumpIfFalse | OpCode::Loop | OpCode::Jump => 3,
             OpCode::ConstantLong => 4,
@@ -86,6 +87,7 @@ impl Display for OpCode {
             OpCode::Closure => "OP_CLOSURE",
             OpCode::CloseUpvalue => "OP_CLOSE_UPVALUE",
             OpCode::Class => "OP_CLASS",
+            OpCode::Method => "OP_METHOD",
         };
         write!(f, "{:<16}", representation)
     }

@@ -358,8 +358,34 @@ impl<'a> Compiler<'a> {
             self.chunk.push(constant_index as u8, line);
             self.define_variable(None, line);
         }
+        // TODO: Will break with inheritance
+        self.variable(false)?;
         self.consume(TokenType::LeftBrace, "Expect '{' before class body.")?;
-        self.consume(TokenType::RightBrace, "Expect '}' after class body.")
+        loop {
+            match self.current_token().token_type {
+                TokenType::RightBrace | TokenType::Eof => {
+                    break;
+                }
+                _ => {
+                    self.method()?;
+                }
+            }
+        }
+        self.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
+        self.chunk.push_code(OpCode::Pop, line);
+        Ok(())
+    }
+
+    #[inline]
+    fn method(&mut self) -> CompilationResult {
+        self.consume(TokenType::Identifier, "Expect method name.")?;
+        let name = self.intern_string();
+        let constant_index = self.chunk.push_constant_to_pool(Value::String(name));
+        let line = self.previous_token().line;
+        self.compile_function()?;
+        self.chunk.push_code(OpCode::Method, line);
+        self.chunk.push(constant_index as u8, line);
+        Ok(())
     }
 
     #[inline]

@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use crate::bytecode::value::Value;
@@ -6,12 +7,12 @@ use super::object_class::ObjectClass;
 
 #[derive(Clone)]
 pub struct ObjectInstance {
-    pub class: Rc<ObjectClass>,
+    pub class: Rc<RefCell<ObjectClass>>,
     fields: HashMap<Rc<ObjectString>, Value>
 }
 
 impl ObjectInstance {
-    pub fn new(class: Rc<ObjectClass>) -> Self {
+    pub fn new(class: Rc<RefCell<ObjectClass>>) -> Self {
         Self { class, fields: HashMap::new() }
     }
 

@@ -71,7 +71,7 @@ impl Chunk {
             OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal
             | OpCode::SetGlobal | OpCode::SetLocal | OpCode::GetLocal
             | OpCode::GetUpvalue | OpCode::SetUpvalue | OpCode::Class
-            | OpCode::GetProperty | OpCode::SetProperty => {
+            | OpCode::GetProperty | OpCode::SetProperty | OpCode::Method => {
                 print!("{:04} ", offset);
                 self.print_constant(iter, op_code, line);
             }
