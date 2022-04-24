@@ -23,6 +23,7 @@ pub struct Compiler<'a> {
     previous_token: Option<Token>,
     current_token: Option<Token>,
     loop_context: Option<LoopContext>,
+    is_inside_class: bool,
 }
 
 pub struct CompilerContext<'a> {
@@ -33,6 +34,7 @@ pub struct CompilerContext<'a> {
     previous_token: Option<Token>,
     current_token: Option<Token>,
     enclosing_scope: Rc<RefCell<Scope>>,
+    is_inside_class: bool,
 }
 
 impl<'a> CompilerContext<'a>  {
@@ -40,6 +42,7 @@ impl<'a> CompilerContext<'a>  {
         source: &'a str,
         parse_rules: &'a [ParseRule<'a>; 39],
         interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
+        is_inside_class: bool,
     ) -> Self {
         Self {
             scanner: Rc::new(RefCell::new(Scanner::new(source))),
@@ -48,7 +51,8 @@ impl<'a> CompilerContext<'a>  {
             interned_strings,
             previous_token: None,
             current_token: None,
-            enclosing_scope: Rc::new(RefCell::new(Scope::new(None)))
+            enclosing_scope: Rc::new(RefCell::new(Scope::new(None))),
+            is_inside_class,
         }
     }
 }
@@ -66,6 +70,7 @@ impl<'a> Compiler<'a> {
             previous_token: context.previous_token,
             current_token: context.current_token,
             loop_context: None,
+            is_inside_class: context.is_inside_class,
         }
     }
 
@@ -281,7 +286,8 @@ impl<'a> Compiler<'a> {
             interned_strings: Rc::clone(&self.interned_strings),
             previous_token: self.previous_token.clone(),
             current_token: self.current_token.clone(),
-            enclosing_scope: Rc::clone(&self.scope)
+            enclosing_scope: Rc::clone(&self.scope),
+            is_inside_class: self.is_inside_class,
         };
         let mut compiler = Compiler::new(compiler_context);
 
@@ -366,6 +372,9 @@ impl<'a> Compiler<'a> {
             self.chunk.push(constant_index as u8, line);
             self.define_variable(None, line);
         }
+        let prev_is_inside_class = self.is_inside_class;
+        self.is_inside_class = true;
+
         // TODO: Will break with inheritance
         self.variable(false)?;
         self.consume(TokenType::LeftBrace, "Expect '{' before class body.")?;
@@ -381,6 +390,7 @@ impl<'a> Compiler<'a> {
         }
         self.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
         self.chunk.push_code(OpCode::Pop, line);
+        self.is_inside_class = prev_is_inside_class;
         Ok(())
     }
 
@@ -878,7 +888,11 @@ impl<'a> Compiler<'a> {
 
     #[inline]
     fn this(&mut self, _can_assign: bool) -> CompilationResult {
-        self.variable(false)
+        if self.is_inside_class == false {
+            Err(CompileError::make_from_token(self.previous_token(), "Can't use 'this' outside of a class."))
+        } else {
+            self.variable(false)
+        }
     }
 
     #[inline]

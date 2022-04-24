@@ -30,6 +30,7 @@ pub fn run_interpreter(script: String) {
         &script,
         &parse_rules,
         Rc::clone(&interned_strings),
+        false,
     );
     let mut compiler = Compiler::new(compiler_context);
     if let Some(chunk) = compiler.compile() {
