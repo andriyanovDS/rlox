@@ -418,6 +418,10 @@ impl VirtualMachine {
                 self.stack.push(Value::Instance(Rc::new(RefCell::new(instance))));
                 Ok(())
             }
+            Value::BoundMethod(bound_method) => {
+                let closure = Rc::clone(&bound_method.method);
+                self.call_closure(&closure, arguments_count_usize, offset, &closure.upvalues, upvalues)
+            }
             _ => {
                 Err(VirtualMachine::runtime_error("Can only call functions and classes.".to_string(), offset))
             }

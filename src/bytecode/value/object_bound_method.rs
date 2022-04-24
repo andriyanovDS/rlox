@@ -6,13 +6,13 @@ use super::object_instance::ObjectInstance;
 
 #[derive(Clone)]
 pub struct ObjectBoundMethod {
+    pub method: Rc<ObjectClosure>,
     receiver: Rc<RefCell<ObjectInstance>>,
-    method: Rc<ObjectClosure>,
 }
 
 impl ObjectBoundMethod {
     pub fn new(receiver: Rc<RefCell<ObjectInstance>>, method: Rc<ObjectClosure>) -> Self {
-        Self { receiver, method }
+        Self { method, receiver }
     }
 }
 
