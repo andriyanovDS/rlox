@@ -7,6 +7,7 @@ use super::upvalue::{Upvalues, UpvaluesRefIterator};
 use super::compiler::{CompilationResult, CompileError};
 use super::token::{Token, TokenType};
 
+const THIS_LEXEME: &str = "this";
 const STACK_SIZE: usize = u8::MAX as usize + 1;
 const NOT_INITIALIZED: Local = Local {
     token: Token {
@@ -101,7 +102,15 @@ impl Scope {
         let lexeme = token.lexeme.as_ref().unwrap().make_slice(source);
         let end_index = self.locals_count - 1;
         for (index, local) in self.locals_iter().enumerate() {
-            let stored_lexeme = local.token.lexeme.as_ref().unwrap().make_slice(source);
+            let stored_lexeme = match local.token.lexeme.as_ref() {
+                Some(lexeme) => lexeme.make_slice(source),
+                None if token.token_type == TokenType::This && local.token.token_type == TokenType::This => {
+                    return Ok(Some(end_index - index as u8));
+                },
+                None => {
+                    continue;
+                }
+            };
             if stored_lexeme != lexeme {
                 continue;
             }
@@ -159,7 +168,13 @@ impl Scope {
             if local.depth != 0 && local.depth < self.scope_depth {
                 return false;
             }
-            let stored_lexeme = local.token.lexeme.as_ref().unwrap().make_slice(source);
+            let stored_lexeme = match local.token.lexeme.as_ref() {
+                Some(lexeme) => lexeme.make_slice(source),
+                None if token.token_type == TokenType::This => THIS_LEXEME,
+                None => {
+                    continue;
+                }
+            };
             if stored_lexeme == lexeme {
                 return true;
             }

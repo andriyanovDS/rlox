@@ -420,6 +420,8 @@ impl VirtualMachine {
             }
             Value::BoundMethod(bound_method) => {
                 let closure = Rc::clone(&bound_method.method);
+                let instance_index = self.stack.top_index() - arguments_count_usize - 1;
+                self.stack.modify_at_index(instance_index, Value::Instance(Rc::clone(&bound_method.receiver)));
                 self.call_closure(&closure, arguments_count_usize, offset, &closure.upvalues, upvalues)
             }
             _ => {
@@ -513,7 +515,7 @@ impl VirtualMachine {
             return Err(VirtualMachine::runtime_error("Stack overflow.".to_string(), offset));
         }
         let cloned_function = Rc::clone(&closure.function);
-        let slots_start = self.stack.top_index() - arguments_count;
+        let slots_start = self.stack.top_index() - arguments_count - 1;
         let chunk = &cloned_function.as_ref().chunk;
 
         let result = self.handle_chunk(chunk, slots_start, upvalues, enclosing_upvalues);

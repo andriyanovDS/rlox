@@ -7,7 +7,7 @@ use super::object_instance::ObjectInstance;
 #[derive(Clone)]
 pub struct ObjectBoundMethod {
     pub method: Rc<ObjectClosure>,
-    receiver: Rc<RefCell<ObjectInstance>>,
+    pub receiver: Rc<RefCell<ObjectInstance>>,
 }
 
 impl ObjectBoundMethod {

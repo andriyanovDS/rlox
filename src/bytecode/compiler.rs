@@ -265,12 +265,12 @@ impl<'a> Compiler<'a> {
         if global_index.is_none() {
             self.scope_mut().mark_local_initialized();
         }
-        self.compile_function()?;
+        self.compile_function(false)?;
         self.define_variable(global_index, line);
         Ok(())
     }
 
-    fn compile_function(&mut self) -> CompilationResult {
+    fn compile_function(&mut self, is_method: bool) -> CompilationResult {
         let function_name = self.intern_string();
         let function_name_line = self.previous_token().line;
 
@@ -284,6 +284,14 @@ impl<'a> Compiler<'a> {
             enclosing_scope: Rc::clone(&self.scope)
         };
         let mut compiler = Compiler::new(compiler_context);
+
+        let token = Token {
+            token_type: if is_method { TokenType::This } else { TokenType::Nil },
+            lexeme: None,
+            line: 0,
+        };
+        compiler.scope.as_ref().borrow_mut().add_local(token)?;
+
         let arity = compiler.parse_function()?;
         let line = self.previous_token().line;
         compiler.emit_return(line);
@@ -382,7 +390,7 @@ impl<'a> Compiler<'a> {
         let name = self.intern_string();
         let constant_index = self.chunk.push_constant_to_pool(Value::String(name));
         let line = self.previous_token().line;
-        self.compile_function()?;
+        self.compile_function(true)?;
         self.chunk.push_code(OpCode::Method, line);
         self.chunk.push(constant_index as u8, line);
         Ok(())
@@ -869,6 +877,11 @@ impl<'a> Compiler<'a> {
     }
 
     #[inline]
+    fn this(&mut self, _can_assign: bool) -> CompilationResult {
+        self.variable(false)
+    }
+
+    #[inline]
     fn intern_string(&mut self) -> Rc<ObjectString> {
         let token = self.previous_token();
         let lexeme = token.lexeme
@@ -1050,7 +1063,10 @@ impl<'a> Compiler<'a> {
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Print
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Return
             ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::Super
-            ParseRule { parse_type: ParseType::None, precedence: Precedence::None }, // TokenType::This
+            ParseRule {
+                parse_type: ParseType::Prefix(Compiler::this),
+                precedence: Precedence::None
+            }, // TokenType::This
             ParseRule {
                 parse_type: ParseType::Prefix(Compiler::literal),
                 precedence: Precedence::None
