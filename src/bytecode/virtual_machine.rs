@@ -24,6 +24,7 @@ pub struct VirtualMachine {
     globals: HashTable<Rc<ObjectString>, Value>,
     frame_count: usize,
     open_upvalues: BinaryHeap<Rc<RefCell<ObjectUpvalue>>>,
+    init_string: Rc<ObjectString>,
 }
 
 impl VirtualMachine {
@@ -36,6 +37,7 @@ impl VirtualMachine {
             globals,
             frame_count: 0,
             open_upvalues: BinaryHeap::new(),
+            init_string: Rc::new(ObjectString::init_string()),
         }
     }
 
@@ -415,7 +417,15 @@ impl VirtualMachine {
             }
             Value::Class(class) => {
                 let instance = ObjectInstance::new(class.clone());
+                let class = Rc::clone(&instance.class);
                 self.stack.push(Value::Instance(Rc::new(RefCell::new(instance))));
+                if let Some(init) = class.as_ref().borrow().method(&self.init_string) {
+                    let closure = Rc::clone(init);
+                    self.call_closure(&closure, arguments_count_usize, offset, &closure.upvalues, upvalues)?;
+                } else if arguments_count != 0 {
+                    let message = format!("Expected 0 arguments but got {}.", arguments_count);
+                    return Err(VirtualMachine::runtime_error(message, offset));
+                }
                 Ok(())
             }
             Value::BoundMethod(bound_method) => {

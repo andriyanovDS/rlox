@@ -8,7 +8,8 @@ use super::chunk::Chunk;
 use super::op_code::OpCode;
 use super::scanner::ScanError;
 use super::token::{Token, TokenType};
-use super::value::{Value, object_function::ObjectFunction, object_string::ObjectString};
+use super::value::{Value, object_function::ObjectFunction, object_string};
+use object_string::{ObjectString, INIT_KEYWORD};
 use super::scanner::Scanner;
 use super::parse_rule::{ParseType, Precedence, ParseRule};
 
@@ -93,7 +94,7 @@ impl<'a> Compiler<'a> {
         }
         let line = self.previous_token().line;
         self.consume(TokenType::Eof, "Expect end of expression.")?;
-        self.emit_return(line);
+        self.emit_return(line, &FunctionType::Function);
         Ok(())
     }
 
@@ -195,7 +196,7 @@ impl<'a> Compiler<'a> {
 
     fn return_statement(&mut self) -> CompilationResult {
         if self.current_token().token_type == TokenType::Semicolon {
-            self.emit_return(self.current_token().line);
+            self.emit_return(self.current_token().line, &FunctionType::Function);
             self.advance()
         } else {
             self.expression()?;
@@ -270,12 +271,12 @@ impl<'a> Compiler<'a> {
         if global_index.is_none() {
             self.scope_mut().mark_local_initialized();
         }
-        self.compile_function(false)?;
+        self.compile_function(FunctionType::Function)?;
         self.define_variable(global_index, line);
         Ok(())
     }
 
-    fn compile_function(&mut self, is_method: bool) -> CompilationResult {
+    fn compile_function(&mut self, function_type: FunctionType) -> CompilationResult {
         let function_name = self.intern_string();
         let function_name_line = self.previous_token().line;
 
@@ -292,7 +293,7 @@ impl<'a> Compiler<'a> {
         let mut compiler = Compiler::new(compiler_context);
 
         let token = Token {
-            token_type: if is_method { TokenType::This } else { TokenType::Nil },
+            token_type: function_type.initial_local_variable_token_type(),
             lexeme: None,
             line: 0,
         };
@@ -300,7 +301,7 @@ impl<'a> Compiler<'a> {
 
         let arity = compiler.parse_function()?;
         let line = self.previous_token().line;
-        compiler.emit_return(line);
+        compiler.emit_return(line, &function_type);
 
         self.previous_token = compiler.previous_token.clone();
         self.current_token = compiler.current_token.clone();
@@ -398,9 +399,10 @@ impl<'a> Compiler<'a> {
     fn method(&mut self) -> CompilationResult {
         self.consume(TokenType::Identifier, "Expect method name.")?;
         let name = self.intern_string();
+        let is_initializer = &name.value == INIT_KEYWORD;
         let constant_index = self.chunk.push_constant_to_pool(Value::String(name));
         let line = self.previous_token().line;
-        self.compile_function(true)?;
+        self.compile_function(FunctionType::Method(is_initializer))?;
         self.chunk.push_code(OpCode::Method, line);
         self.chunk.push(constant_index as u8, line);
         Ok(())
@@ -907,8 +909,13 @@ impl<'a> Compiler<'a> {
         strings.find_string_or_insert_new(lexeme)
     }
 
-    fn emit_return(&mut self, line: usize) {
-        self.chunk.push_code(OpCode::Nil, line);
+    fn emit_return(&mut self, line: usize, function_type: &FunctionType) {
+        if function_type.is_initializer() {
+            self.chunk.push_code(OpCode::GetLocal, line);
+            self.chunk.push(0u8, line);
+        } else {
+            self.chunk.push_code(OpCode::Nil, line);
+        }
         self.modify_chunk(|chunk| chunk.push_code(OpCode::Return, line));
     }
 
@@ -1118,3 +1125,24 @@ struct LoopContext {
 }
 
 pub type CompilationResult = Result<(), CompileError>;
+
+enum FunctionType {
+    Function,
+    Method(bool)
+}
+
+impl FunctionType {
+    fn initial_local_variable_token_type(&self) -> TokenType {
+        match self {
+            FunctionType::Function => TokenType::Nil,
+            FunctionType::Method(_) => TokenType::This,
+        }
+    }
+    fn is_initializer(&self) -> bool {
+        match self {
+            FunctionType::Function => false,
+            FunctionType::Method(is_initializer) => *is_initializer,
+        }
+    }
+
+}

@@ -3,6 +3,8 @@ use std::hash::Hash;
 use std::rc::Rc;
 use super::super::hash_table::{Hashable, HashTable};
 
+pub const INIT_KEYWORD: &str = "init";
+
 #[derive(Clone, Hash, Eq)]
 pub struct ObjectString {
     pub value: String,
@@ -26,6 +28,13 @@ impl ObjectString {
 
     pub fn new(string: String, hash: usize) -> Self {
         Self { value: string, hash }
+    }
+
+    pub fn init_string() -> Self {
+        Self {
+            value: INIT_KEYWORD.to_string(),
+            hash: ObjectString::hash_string(INIT_KEYWORD)
+        }
     }
 
     pub fn hash_string(string: &str) -> usize {

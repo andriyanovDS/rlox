@@ -33,7 +33,7 @@ impl Chunk {
         let mut offset: usize = 0;
         while let Some(code) = iter.next() {
             let op_code = Chunk::byte_to_op_code(code.clone());
-            offset += self.disassemble_instruction(op_code, &mut iter, offset);
+            offset = self.disassemble_instruction(op_code, &mut iter, offset);
         }
     }
 
