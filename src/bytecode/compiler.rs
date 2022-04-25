@@ -25,6 +25,7 @@ pub struct Compiler<'a> {
     current_token: Option<Token>,
     loop_context: Option<LoopContext>,
     is_inside_class: bool,
+    function_type: FunctionType,
 }
 
 pub struct CompilerContext<'a> {
@@ -36,6 +37,7 @@ pub struct CompilerContext<'a> {
     current_token: Option<Token>,
     enclosing_scope: Rc<RefCell<Scope>>,
     is_inside_class: bool,
+    function_type: FunctionType,
 }
 
 impl<'a> CompilerContext<'a>  {
@@ -44,6 +46,7 @@ impl<'a> CompilerContext<'a>  {
         parse_rules: &'a [ParseRule<'a>; 39],
         interned_strings: Rc<RefCell<HashTable<Rc<ObjectString>, ()>>>,
         is_inside_class: bool,
+        function_type: FunctionType,
     ) -> Self {
         Self {
             scanner: Rc::new(RefCell::new(Scanner::new(source))),
@@ -54,6 +57,7 @@ impl<'a> CompilerContext<'a>  {
             current_token: None,
             enclosing_scope: Rc::new(RefCell::new(Scope::new(None))),
             is_inside_class,
+            function_type,
         }
     }
 }
@@ -72,6 +76,7 @@ impl<'a> Compiler<'a> {
             current_token: context.current_token,
             loop_context: None,
             is_inside_class: context.is_inside_class,
+            function_type: context.function_type,
         }
     }
 
@@ -94,7 +99,7 @@ impl<'a> Compiler<'a> {
         }
         let line = self.previous_token().line;
         self.consume(TokenType::Eof, "Expect end of expression.")?;
-        self.emit_return(line, &FunctionType::Function);
+        self.emit_return(line);
         Ok(())
     }
 
@@ -196,8 +201,10 @@ impl<'a> Compiler<'a> {
 
     fn return_statement(&mut self) -> CompilationResult {
         if self.current_token().token_type == TokenType::Semicolon {
-            self.emit_return(self.current_token().line, &FunctionType::Function);
+            self.emit_return(self.current_token().line);
             self.advance()
+        } else if self.function_type == FunctionType::Method(true) {
+            Err(CompileError::make_from_token(self.previous_token(), "Can't return a value from an initializer."))
         } else {
             self.expression()?;
             self.consume(TokenType::Semicolon, "Expect ';' after return value.")?;
@@ -289,6 +296,7 @@ impl<'a> Compiler<'a> {
             current_token: self.current_token.clone(),
             enclosing_scope: Rc::clone(&self.scope),
             is_inside_class: self.is_inside_class,
+            function_type,
         };
         let mut compiler = Compiler::new(compiler_context);
 
@@ -301,7 +309,7 @@ impl<'a> Compiler<'a> {
 
         let arity = compiler.parse_function()?;
         let line = self.previous_token().line;
-        compiler.emit_return(line, &function_type);
+        compiler.emit_return(line);
 
         self.previous_token = compiler.previous_token.clone();
         self.current_token = compiler.current_token.clone();
@@ -909,8 +917,8 @@ impl<'a> Compiler<'a> {
         strings.find_string_or_insert_new(lexeme)
     }
 
-    fn emit_return(&mut self, line: usize, function_type: &FunctionType) {
-        if function_type.is_initializer() {
+    fn emit_return(&mut self, line: usize) {
+        if self.function_type.is_initializer() {
             self.chunk.push_code(OpCode::GetLocal, line);
             self.chunk.push(0u8, line);
         } else {
@@ -1126,21 +1134,23 @@ struct LoopContext {
 
 pub type CompilationResult = Result<(), CompileError>;
 
-enum FunctionType {
+#[derive(Clone, Copy, PartialEq)]
+pub enum FunctionType {
     Function,
-    Method(bool)
+    Script,
+    Method(bool),
 }
 
 impl FunctionType {
     fn initial_local_variable_token_type(&self) -> TokenType {
         match self {
-            FunctionType::Function => TokenType::Nil,
+            FunctionType::Function | FunctionType::Script => TokenType::Nil,
             FunctionType::Method(_) => TokenType::This,
         }
     }
     fn is_initializer(&self) -> bool {
         match self {
-            FunctionType::Function => false,
+            FunctionType::Function | FunctionType::Script => false,
             FunctionType::Method(is_initializer) => *is_initializer,
         }
     }

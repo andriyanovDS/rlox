@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::bytecode::compiler::{Compiler, CompilerContext};
+use crate::bytecode::compiler::{Compiler, CompilerContext, FunctionType};
 use crate::bytecode::hash_table::HashTable;
 use crate::bytecode::value::object_string::ObjectString;
 use crate::bytecode::virtual_machine::VirtualMachine;
@@ -31,6 +31,7 @@ pub fn run_interpreter(script: String) {
         &parse_rules,
         Rc::clone(&interned_strings),
         false,
+        FunctionType::Script,
     );
     let mut compiler = Compiler::new(compiler_context);
     if let Some(chunk) = compiler.compile() {
