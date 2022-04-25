@@ -418,7 +418,8 @@ impl VirtualMachine {
             Value::Class(class) => {
                 let instance = ObjectInstance::new(class.clone());
                 let class = Rc::clone(&instance.class);
-                self.stack.push(Value::Instance(Rc::new(RefCell::new(instance))));
+                let instance_index = self.stack.top_index() - arguments_count_usize - 1;
+                self.stack.modify_at_index(instance_index, Value::Instance(Rc::new(RefCell::new(instance))));
                 if let Some(init) = class.as_ref().borrow().method(&self.init_string) {
                     let closure = Rc::clone(init);
                     self.call_closure(&closure, arguments_count_usize, offset, &closure.upvalues, upvalues)?;
@@ -530,7 +531,7 @@ impl VirtualMachine {
 
         let result = self.handle_chunk(chunk, slots_start, upvalues, enclosing_upvalues);
         let return_value = self.stack.pop().unwrap();
-        while self.stack.top_index() + 1 > slots_start {
+        while self.stack.top_index() > slots_start {
             self.stack.pop();
         }
         self.stack.push(return_value);
